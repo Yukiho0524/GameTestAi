@@ -102,6 +102,28 @@ def execute_step(
             else:
                 device.tap(x, y)
 
+        elif step.action == "tap_scene":
+            # 先比對「目前畫面 vs 錄影參考畫面」，相符才點同一位置
+            x, y = float(p["x"]), float(p["y"])
+            touch_loc = ("norm", x, y)
+            thr = float(p.get("scene_threshold", 0.65))
+            rimg = compare.load_image(_ref_path(cfg, step.reference)) if step.reference else None
+            scene = before_img if before_img is not None else device.screencap()
+            sim = compare.ssim(scene, rimg) if rimg is not None else 0.0
+            ref_sim = sim
+            score = sim
+            if rimg is None:
+                ok = False
+                msg = f"tap_scene 需要有效的 reference 畫面：{step.reference}"
+            elif sim >= thr:
+                if step.press == "long":
+                    device.long_press(x, y, dur)
+                else:
+                    device.tap(x, y)
+            else:
+                ok = False
+                msg = f"畫面與錄影不符（相似度 {sim:.2f} < {thr}），不點擊以免誤觸"
+
         elif step.action == "long_press":
             device.long_press(float(p["x"]), float(p["y"]),
                               int(p.get("duration_ms", 800)))

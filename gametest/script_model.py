@@ -11,6 +11,7 @@ import yaml
 ACTIONS = {
     "tap",            # 點擊正規化座標       params: x, y
     "tap_image",      # 找到圖片後點擊       params: template, [region], [timeout]
+    "tap_scene",      # 比對畫面相符才點同位置 params: reference, x, y, [scene_threshold]
     "long_press",     # 長壓座標            params: x, y, [duration_ms=800]
     "long_press_image",  # 找到圖片後長壓    params: template, [duration_ms=800], [timeout], [region]
     "swipe",          # 滑動               params: x1,y1,x2,y2,[duration_ms]
@@ -25,7 +26,7 @@ ACTIONS = {
 
 
 # 會「觸控」的動作（需做觸控前後截圖與適配比對）
-CLICK_ACTIONS = {"tap", "tap_image", "long_press", "long_press_image"}
+CLICK_ACTIONS = {"tap", "tap_image", "tap_scene", "long_press", "long_press_image"}
 
 
 @dataclass
