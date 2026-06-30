@@ -144,6 +144,48 @@ class Adb:
         except AdbError:
             pass
 
+    _REC_DEV = "/sdcard/gametest_rec.mp4"
+
+    def screenrecord_start(self, max_seconds: int = 180,
+                           bitrate: int = 8_000_000):
+        """開始錄影（非阻塞），回傳 Popen 控制代碼。screenrecord 上限 180 秒。"""
+        self.shell("settings", "put", "system", "show_touches", "1")
+        try:
+            self.shell("rm", "-f", self._REC_DEV)
+        except AdbError:
+            pass
+        return subprocess.Popen(
+            [*self._base(), "shell", "screenrecord", "--time-limit",
+             str(min(max_seconds, 180)), "--bit-rate", str(bitrate), self._REC_DEV],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def screenrecord_stop(self, popen, local_path: str, timeout: int = 40) -> None:
+        """送 INT 讓 screenrecord 收尾寫檔，等結束後 pull 回本機。"""
+        try:
+            self.shell("pkill", "-INT", "screenrecord")
+        except AdbError:
+            pid = ""
+            try:
+                pid = self.shell("pidof", "screenrecord").strip()
+            except AdbError:
+                pass
+            if pid:
+                self.shell("kill", "-INT", pid.split()[0])
+        try:
+            popen.wait(timeout=timeout)
+        except Exception:
+            try:
+                popen.kill()
+            except Exception:
+                pass
+        time.sleep(1.0)
+        subprocess.run([*self._base(), "pull", self._REC_DEV, local_path],
+                       capture_output=True, timeout=120)
+        try:
+            self.shell("rm", "-f", self._REC_DEV)
+        except AdbError:
+            pass
+
     def force_stop(self, package: str) -> None:
         try:
             self.shell("am", "force-stop", package)

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 
 from . import resolutions as R
@@ -41,6 +42,17 @@ class App(tk.Tk):
             .grid(row=1, column=3, padx=4)
         ttk.Button(top, text="驗證 App 可開啟", command=self._on_verify)\
             .grid(row=1, column=4, padx=4)
+        # 錄影（含觸控標記，供生成腳本）
+        self.rec_btn_start = ttk.Button(top, text="● 開始錄影", command=self._on_rec_start)
+        self.rec_btn_start.grid(row=2, column=3, padx=4, pady=4)
+        self.rec_btn_stop = ttk.Button(top, text="■ 停止錄影",
+                                       command=self._on_rec_stop, state="disabled")
+        self.rec_btn_stop.grid(row=2, column=4, padx=4, pady=4)
+        ttk.Label(top, text="錄影（自動開觸控標記，最長180秒）：")\
+            .grid(row=2, column=0, columnspan=3, sticky="w", padx=6)
+        self._rec_popen = None
+        self._rec_adb = None
+        self._rec_out = None
         top.columnconfigure(2, weight=1)
 
         # 區塊二：解析度（直版 / 橫版）
@@ -190,6 +202,58 @@ class App(tk.Tk):
             else:
                 self._set_status(f"已啟動，解析度 {res.label}")
                 self._log("[啟動] 完成")
+        self._run_bg(task, done)
+
+    def _on_rec_start(self):
+        from datetime import datetime
+        self.rec_btn_start.config(state="disabled")
+        self._set_status("準備錄影（連線模擬器中）...")
+        self._rec_out = str(self.cfg.video_source_dir /
+                            f"rec_{datetime.now():%Y%m%d_%H%M%S}.mp4")
+
+        def task():
+            adb = self._adb()
+            popen = adb.screenrecord_start()
+            return adb, popen
+
+        def done(res, err):
+            if err:
+                self.rec_btn_start.config(state="normal")
+                self._set_status("錄影啟動失敗")
+                self._log(f"[錄影] 錯誤：{err}")
+                messagebox.showerror("錄影失敗", str(err))
+                return
+            self._rec_adb, self._rec_popen = res
+            self.rec_btn_stop.config(state="normal")
+            self._set_status("● 錄影中… 請到模擬器操作，完成後按「停止錄影」")
+            self._log(f"[錄影] 開始，輸出 {self._rec_out}")
+        self._run_bg(task, done)
+
+    def _on_rec_stop(self):
+        if not self._rec_adb or not self._rec_popen:
+            return
+        self.rec_btn_stop.config(state="disabled")
+        self._set_status("停止錄影、存檔中...")
+        adb, popen, out = self._rec_adb, self._rec_popen, self._rec_out
+
+        def task():
+            adb.screenrecord_stop(popen, out)
+            return out
+
+        def done(res, err):
+            self._rec_popen = self._rec_adb = None
+            self.rec_btn_start.config(state="normal")
+            if err:
+                self._set_status("存檔失敗")
+                self._log(f"[錄影] 錯誤：{err}")
+                messagebox.showerror("錄影存檔失敗", str(err))
+                return
+            self._refresh_scripts()
+            self._set_status(f"錄影完成：{Path(res).name}")
+            self._log(f"[錄影] 完成：{res}")
+            messagebox.showinfo("錄影完成",
+                                f"已存到來源夾：\n{res}\n\n"
+                                "可讓 autogen 自動生成腳本，或用 detect-taps 檢視點擊。")
         self._run_bg(task, done)
 
     def _on_verify(self):
