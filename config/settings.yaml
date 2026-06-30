@@ -54,3 +54,7 @@ watch:
   every_sec: 1.0
   # 常駐監看時的輪詢間隔（秒）
   poll_interval: 5
+
+review:
+  # 測試跑完若「總成功率」低於此 %，自動叫 Claude review 並修正腳本（0=關閉）
+  auto_below: 50

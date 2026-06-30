@@ -63,6 +63,9 @@ class Config:
     watch_every_sec: float
     watch_poll_interval: int
 
+    # review：跑完若總成功率低於此 %，自動叫 Claude review+修正腳本（0=關閉）
+    auto_review_below: int
+
     def ensure_dirs(self) -> None:
         for d in (self.scripts_dir, self.assets_dir, self.recordings_dir,
                   self.results_dir, self.frames_dir):
@@ -87,6 +90,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     match = data.get("matching", {})
     paths = data.get("paths", {})
     watch = data.get("watch", {})
+    review = data.get("review", {})
 
     # 解析度可用兩種方式指定：
     #   1) resolution_presets: [預設 key, ...]（引用 resolutions.py 的預設庫）
@@ -132,4 +136,5 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
             "extensions", [".mp4", ".mkv", ".avi", ".mov", ".flv"])],
         watch_every_sec=float(watch.get("every_sec", 1.0)),
         watch_poll_interval=int(watch.get("poll_interval", 5)),
+        auto_review_below=int(review.get("auto_below", 50)),
     )

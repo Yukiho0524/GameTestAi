@@ -180,6 +180,11 @@ def cmd_test(args):
     if not args.no_open:
         webbrowser.open(xlsx_path.as_uri())
 
+    # 成功率過低 → 自動 review + 修正腳本（只修一次）
+    if not args.no_review:
+        from gametest.autoreview import maybe_review
+        maybe_review(cfg, script.name, suite.success_rate(), root)
+
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="雷電模擬器手遊自動化測試系統")
@@ -227,6 +232,7 @@ def main(argv=None):
     sp.add_argument("--repeat", type=int, help="覆寫重複次數")
     sp.add_argument("--once", action="store_true", help="快速模式：單解析度單次（修腳本時用）")
     sp.add_argument("--no-open", action="store_true", help="不要自動開啟報告")
+    sp.add_argument("--no-review", action="store_true", help="關閉成功率過低時的自動 review")
     sp.set_defaults(func=cmd_test)
 
     sp = sub.add_parser("diagnose", help="診斷最近一次測試，列出失敗步驟與修正建議")
