@@ -1,0 +1,45 @@
+# ===== 雷電模擬器自動化測試系統 設定檔 =====
+
+ldplayer:
+  # ldconsole.exe 路徑（負責建立 / 啟動 / 設定解析度）
+  console_path: "C:/LDPlayer/LDPlayer9/ldconsole.exe"
+  # adb.exe 路徑（負責輸入 / 截圖）
+  adb_path: "C:/LDPlayer/LDPlayer9/adb.exe"
+  # 要使用的模擬器實例 index（ldconsole list2 第一欄）
+  instance_index: 0
+  # 開機完成的等待秒數上限
+  boot_timeout: 120
+  # 雷電 adb 連線埠規則：5555 + index*2（連不到時會退回掃描 adb devices）
+  adb_base_port: 5555
+
+test:
+  # 受測 App 的套件名稱（adb shell pm list packages 可查）
+  package_name: "com.example.game"
+  # 每個解析度重複執行幾次
+  repeat: 10
+  # 要測試的解析度清單 (width, height, dpi)
+  resolutions:
+    - { width: 1280, height: 720, dpi: 240 }
+    - { width: 1920, height: 1080, dpi: 320 }
+    - { width: 960, height: 540, dpi: 160 }
+  # 每個步驟都截圖（false 則只在斷言/失敗時截圖）
+  screenshot_every_step: true
+  # 每次重複執行前是否重啟 App（確保乾淨狀態）
+  restart_app_each_run: true
+
+matching:
+  # 模板比對相似度門檻 (0~1)
+  threshold: 0.80
+  # 啟用多尺度比對（跨解析度必開）
+  multi_scale: true
+  # 多尺度搜尋範圍與步長
+  scale_min: 0.5
+  scale_max: 1.5
+  scale_steps: 21
+
+paths:
+  scripts: "scripts"
+  assets: "assets"
+  recordings: "recordings"
+  results: "results"
+  frames: "recordings/frames"

@@ -1,0 +1,53 @@
+# 範例測試腳本 —— 由 Claude 分析錄影後自動產生（此為示意模板）
+#
+# 重要：所有座標都是「正規化」的 0~1 比例，左上角(0,0)、右下角(1,1)。
+#        這樣同一份腳本才能跨 1280x720 / 1920x1080 / 960x540 執行。
+# 圖片斷言用的模板圖放在 assets/，建議用 `py run.py capture` 截取後裁切。
+
+name: example_login
+description: 啟動遊戲 → 進入主畫面 → 領取每日獎勵
+step_delay: 1.0      # 每步動作後預設停頓秒數
+
+steps:
+  # 等待開場/標題畫面出現（用圖片確認，找不到則 wait_image 失敗）
+  - action: wait_image
+    name: 等待標題畫面
+    template: title_logo.png
+    timeout: 30
+
+  # 點擊「開始遊戲」按鈕（找到圖片才點，最穩定，跨解析度可用）
+  - action: tap_image
+    name: 點擊開始遊戲
+    template: btn_start.png
+    timeout: 15
+
+  # 也可以用純座標點擊（比例座標）
+  - action: tap
+    name: 關閉公告
+    x: 0.92
+    y: 0.08
+
+  - action: wait
+    name: 等載入
+    seconds: 3
+
+  # === 關鍵斷言：判定這一輪成敗 ===
+  - action: assert_image
+    name: 確認進入主畫面
+    template: main_screen_hud.png
+    critical: true
+
+  # 領每日獎勵
+  - action: tap_image
+    name: 點每日獎勵
+    template: btn_daily_reward.png
+    timeout: 10
+
+  - action: assert_image
+    name: 確認領取成功彈窗
+    template: reward_popup.png
+    critical: true
+
+  # 收尾截圖
+  - action: screenshot
+    name: 結束畫面

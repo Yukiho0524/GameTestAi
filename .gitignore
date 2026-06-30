@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 測試產出
+results/
+recordings/frames/
+recordings/*.mp4
+recordings/*.mkv
+recordings/*.mov
+
+# 模板圖以外的暫存截圖
+*.tmp.png
