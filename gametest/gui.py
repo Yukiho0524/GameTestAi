@@ -50,6 +50,12 @@ class App(tk.Tk):
         self.rec_btn_stop.grid(row=2, column=4, padx=4, pady=4)
         ttk.Label(top, text="錄影（自動開觸控標記，最長180秒）：")\
             .grid(row=2, column=0, columnspan=3, sticky="w", padx=6)
+        # 生成腳本：分析尚未生成的新影片（呼叫 Claude）
+        self.gen_btn = ttk.Button(top, text="⚙ 生成腳本（分析新影片）",
+                                  command=self._on_autogen)
+        self.gen_btn.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=4)
+        ttk.Label(top, text="↑ 錄完按此，由 Claude 看影片自動生成腳本並推 git")\
+            .grid(row=3, column=2, columnspan=3, sticky="w", padx=6)
         self._rec_popen = None
         self._rec_adb = None
         self._rec_out = None
@@ -205,6 +211,37 @@ class App(tk.Tk):
             else:
                 self._set_status(f"已啟動，解析度 {res.label}")
                 self._log("[啟動] 完成")
+        self._run_bg(task, done)
+
+    def _on_autogen(self):
+        if not messagebox.askyesno(
+                "生成腳本", "將分析「來源夾中尚未生成腳本」的影片，"
+                "呼叫 Claude 自動生成並推 git。\n"
+                "每支影片會花一次 Claude 額度、可能需數分鐘。開始？"):
+            return
+        self.gen_btn.config(state="disabled")
+        self._set_status("分析新影片、生成腳本中（呼叫 Claude，請稍候）...")
+        self._log("[生成] 開始分析來源夾新影片 ...")
+
+        def task():
+            from .autogen import scan_once
+            return scan_once(self.cfg)
+
+        def done(res, err):
+            self.gen_btn.config(state="normal")
+            self._refresh_scripts()
+            if err:
+                self._set_status("生成失敗")
+                self._log(f"[生成] 錯誤：{err}")
+                messagebox.showerror("生成失敗", str(err))
+                return
+            n = res or 0
+            self._set_status(f"生成完成：新增 {n} 支腳本")
+            self._log(f"[生成] 完成，新增 {n} 支腳本（詳見主控台輸出）")
+            messagebox.showinfo("生成完成",
+                                f"已處理新影片，新增 {n} 支腳本。\n"
+                                "（若顯示 0：可能沒有待處理影片，或 Claude 未登入/被擋，"
+                                "詳見主控台訊息）")
         self._run_bg(task, done)
 
     def _on_rec_start(self):

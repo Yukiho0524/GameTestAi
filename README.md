@@ -34,9 +34,9 @@ test:
 
 ## 快速啟動（批次檔）
 
-直接**雙擊 `start.bat`**：會先檢查 Python 與必要套件（缺的話自動依 `requirements.txt` 安裝），
-接著**先跑一次 `autogen`**（有新影片就自動呼叫 Claude 生成腳本並推 git），再開啟圖形控制台。
-也可帶參數直接執行子指令（帶參數時不會跑 autogen），例如：
+直接**雙擊 `start.bat`**：檢查 Python 與必要套件（缺的話自動依 `requirements.txt` 安裝），
+再開啟圖形控制台。錄影與「生成腳本」都在 GUI 內：**錄完按「⚙ 生成腳本」**即可由 Claude 分析新影片生成並推 git。
+也可帶參數直接執行子指令，例如：
 
 ```bat
 start.bat                                   :: 開圖形控制台

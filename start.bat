@@ -31,13 +31,11 @@ if errorlevel 1 (
 echo [OK] Packages ready.
 
 REM 3) Run main program.
-REM    No arguments  -> auto-generate scripts for any new videos, then open GUI
-REM    With arguments-> pass straight to run.py (no autogen)
+REM    No arguments  -> open GUI control panel (record + generate inside GUI)
+REM    With arguments-> pass straight to run.py
 REM    e.g.  start.bat devices
 REM          start.bat test scripts\20260630_01.yaml --once
 if "%~1"=="" (
-    echo [AUTOGEN] Checking for new videos ^(may call Claude and take a while^) ...
-    py run.py autogen
     echo [START] Opening control panel ...
     py run.py gui
 ) else (
