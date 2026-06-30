@@ -44,13 +44,30 @@ py run.py devices
 
 ### 2. 上傳錄影並抽幀
 
-把遊戲錄影（mp4/mkv）放進 `recordings/`，抽幀：
+影片來源資料夾預設指向雷電內建錄影輸出：`C:/LDPlayer/LDPlayer9/vms/video`
+（可在 `config/settings.yaml` 的 `paths.video_source` 修改）。
+
+**自動監看（推薦）**——掃描來源資料夾，對「尚無對應腳本」的新影片自動抽幀：
 
 ```powershell
-py run.py extract recordings\my_gameplay.mp4 --every 1.0
+py run.py watch            # 掃一次
+py run.py watch --watch    # 常駐監看（每 5 秒輪詢，Ctrl+C 結束）
+py run.py watch --force    # 即使抽過幀也重抽
 ```
 
-圖片會輸出到 `recordings/frames/my_gameplay/`。
+抽完會列出「待分析影片」清單，每個影片對應 `scripts/<影片名>.yaml`。
+
+**手動單檔抽幀**：
+
+```powershell
+py run.py extract C:\LDPlayer\LDPlayer9\vms\video\my_gameplay.mp4 --every 1.0
+```
+
+圖片會輸出到 `recordings/frames/<影片名>/`。
+
+> **「每新增一個影片就生成對應腳本」的運作方式**：watcher 負責偵測新影片並抽幀，
+> 但腳本內容需要 AI 看圖判讀按鈕與流程才能產生，無法純機器完成。
+> 流程為：`watch` 抽幀 → 在對話跟 Claude 說「分析 <影片名>」→ Claude 產出 `scripts/<影片名>.yaml`。
 
 ### 3. 由 Claude 分析產生測試腳本
 

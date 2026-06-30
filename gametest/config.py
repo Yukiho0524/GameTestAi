@@ -56,6 +56,12 @@ class Config:
     recordings_dir: Path
     results_dir: Path
     frames_dir: Path
+    video_source_dir: Path
+
+    # watch
+    watch_extensions: list[str]
+    watch_every_sec: float
+    watch_poll_interval: int
 
     def ensure_dirs(self) -> None:
         for d in (self.scripts_dir, self.assets_dir, self.recordings_dir,
@@ -80,6 +86,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     test = data.get("test", {})
     match = data.get("matching", {})
     paths = data.get("paths", {})
+    watch = data.get("watch", {})
 
     resolutions = [
         Resolution(width=r["width"], height=r["height"], dpi=r.get("dpi", 240))
@@ -111,4 +118,9 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
         recordings_dir=_abs(root, paths.get("recordings", "recordings")),
         results_dir=_abs(root, paths.get("results", "results")),
         frames_dir=_abs(root, paths.get("frames", "recordings/frames")),
+        video_source_dir=_abs(root, paths.get("video_source", "recordings")),
+        watch_extensions=[e.lower() for e in watch.get(
+            "extensions", [".mp4", ".mkv", ".avi", ".mov", ".flv"])],
+        watch_every_sec=float(watch.get("every_sec", 1.0)),
+        watch_poll_interval=int(watch.get("poll_interval", 5)),
     )

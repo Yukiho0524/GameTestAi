@@ -43,3 +43,14 @@ paths:
   recordings: "recordings"
   results: "results"
   frames: "recordings/frames"
+  # 影片來源資料夾：watcher 會監看這裡的新影片並自動抽幀
+  # 預設指向雷電內建錄影的輸出位置
+  video_source: "C:/LDPlayer/LDPlayer9/vms/video"
+
+watch:
+  # 視為影片的副檔名
+  extensions: [".mp4", ".mkv", ".avi", ".mov", ".flv"]
+  # 抽幀間隔（秒）
+  every_sec: 1.0
+  # 常駐監看時的輪詢間隔（秒）
+  poll_interval: 5

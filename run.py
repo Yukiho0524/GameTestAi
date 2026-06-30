@@ -3,7 +3,8 @@
 
 用法：
   py run.py devices                          # 列出雷電實例與 adb 裝置
-  py run.py extract <影片> [--every 1.0]      # 影片抽幀（供 AI 分析產生腳本）
+  py run.py watch [--watch] [--force]        # 監看影片來源資料夾，新影片自動抽幀
+  py run.py extract <影片> [--every 1.0]      # 手動對單一影片抽幀
   py run.py capture <輸出.png>                # 截一張目前畫面（製作模板圖用）
   py run.py test <腳本.yaml> [--repeat N]     # 執行測試並輸出報告
 """
@@ -13,6 +14,13 @@ import argparse
 import sys
 import webbrowser
 from pathlib import Path
+
+# Windows 主控台預設非 UTF-8，會讓中文/emoji 輸出崩潰；強制切到 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 
 from gametest.config import load_config
 
@@ -40,6 +48,13 @@ def cmd_extract(args):
     print("\n下一步：把這些圖交給 Claude 分析，產生 scripts/*.yaml 測試腳本。")
     if frames:
         print(f"圖片資料夾：{frames[0].parent}")
+
+
+def cmd_watch(args):
+    cfg = load_config(args.config)
+    from gametest.watcher import run as watch_run
+    print(f"影片來源：{cfg.video_source_dir}")
+    watch_run(cfg, watch=args.watch, force=args.force)
 
 
 def cmd_capture(args):
@@ -95,6 +110,11 @@ def main(argv=None):
     sp.add_argument("--every", type=float, default=1.0, help="每幾秒抽一張")
     sp.add_argument("--max", type=int, default=0, help="最多抽幾張 (0=不限)")
     sp.set_defaults(func=cmd_extract)
+
+    sp = sub.add_parser("watch", help="監看影片來源資料夾，對新影片自動抽幀")
+    sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
+    sp.add_argument("--force", action="store_true", help="即使已抽過幀也重抽")
+    sp.set_defaults(func=cmd_watch)
 
     sp = sub.add_parser("capture", help="截目前畫面")
     sp.add_argument("output")
