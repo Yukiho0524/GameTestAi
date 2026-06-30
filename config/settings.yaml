@@ -13,9 +13,8 @@ ldplayer:
   adb_base_port: 5555
 
 test:
-  # 受測 App 的套件名稱（悍利商店 POCKET STORE）
-  # ⚠️ 截圖被切斷，這是推測的完整字串，請用 `start.bat apps --filter gamania` 確認精確值
-  package_name: "com.gamania.pocketstorem.gamania"
+  # 受測 App 的套件名稱（悍利商店 POCKET STORE，使用者確認）
+  package_name: "com.gamania.pocketstorem.gama"
   # 每個解析度重複執行幾次
   repeat: 10
   # 要測試的解析度清單 (width, height, dpi)
