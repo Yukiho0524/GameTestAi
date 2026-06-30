@@ -32,6 +32,17 @@ test:
 
 > 查套件名：`C:/LDPlayer/LDPlayer9/adb.exe -s 127.0.0.1:5555 shell pm list packages | findstr 關鍵字`
 
+## 快速啟動（批次檔）
+
+直接**雙擊 `start.bat`**：會先檢查 Python 與必要套件（缺的話自動依 `requirements.txt` 安裝），
+再開啟圖形控制台。也可帶參數直接執行子指令，例如：
+
+```bat
+start.bat                                   :: 開圖形控制台
+start.bat devices                           :: 列出實例與裝置
+start.bat test scripts\20260630_01.yaml --once
+```
+
 ## 圖形控制台（GUI）
 
 ```powershell
