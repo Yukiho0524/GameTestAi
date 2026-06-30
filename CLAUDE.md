@@ -38,6 +38,13 @@
 
 10. 參考既有範例：`scripts/20260630_01.yaml`（除錯登入流程）、`scripts/20260630_02.yaml`（進入遊戲+商品管理）、`scripts/example_login.yaml`、`scripts/prelude_baseline.yaml`。
 
+## 觸控標記（精準取得點擊位置）
+
+若錄影有開雷電「顯示點按操作」，用 `gametest/touchdetect.py`（CLI `py run.py detect-taps <影片>`）
+可自動抓出每個點擊的時間、正規化座標、時長（長壓判定）。生成腳本時：
+依偵測到的座標，從「點擊前一刻」的影格裁出**被點的圖案**當模板 → `tap_image`；
+長壓（duration≥門檻）則用 `long_press_image`。`MarkerParams` 需用實際標記樣式校準。
+
 ## 受測遊戲（目前）
 悍利商店 POCKET STORE（Gamania）。包體名 `com.gamania.pocketstorem.gama`。
 除錯登入：**左上驚嘆號長壓**開 SRDebugger → OPTIONS 分頁 → 輸入 **AccountID=100** → Login。

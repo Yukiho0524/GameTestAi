@@ -125,6 +125,13 @@ def cmd_autogen(args):
     autogen_run(cfg, watch=args.watch)
 
 
+def cmd_detect_taps(args):
+    cfg = load_config(args.config)
+    cfg.ensure_dirs()
+    from gametest.touchdetect import detect_taps_in_video
+    detect_taps_in_video(cfg, args.video, debug=True)
+
+
 def cmd_capture(args):
     cfg = load_config(args.config)
     from gametest.device import Device
@@ -222,6 +229,10 @@ def main(argv=None):
     sp = sub.add_parser("autogen", help="偵測新影片→抽幀→呼叫 Claude 自動生成腳本並推 git")
     sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
     sp.set_defaults(func=cmd_autogen)
+
+    sp = sub.add_parser("detect-taps", help="從『顯示點按操作』錄影偵測點擊位置(校準用)")
+    sp.add_argument("video")
+    sp.set_defaults(func=cmd_detect_taps)
 
     sp = sub.add_parser("capture", help="截目前畫面")
     sp.add_argument("output")
