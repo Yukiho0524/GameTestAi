@@ -9,7 +9,7 @@
 #   step「點擊便利機建築開面板」   → 城市中便利機建築座標
 #   step「進入黑鐵商店布置模式」   → 商店建築入口座標
 #   step「點擊商店內便利機設備」   → 店內便利機設備座標
-# 校正方式：py run.py test scripts60630_03.yaml --once 後看 diagnose。
+# 校正方式：py run.py test scripts\20260630_03.yaml --once 後看 diagnose。
 
 name: 20260630_03
 description: 便利機管理面板 → 黑鐵商店布置(OPEN開張) → 任務 → 店內便利機面板
