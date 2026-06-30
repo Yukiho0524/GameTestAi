@@ -8,7 +8,12 @@
 
 1. **影格位置**：`recordings/frames/<影片名不含副檔名>/`。挑代表性影格判讀流程（黑屏/載入/標題/各畫面/操作結果）。用 Read 工具看圖。
 
-2. **座標一律正規化 0~1**（左上 0,0、右下 1,1），腳本才能跨解析度跑。
+2. **座標一律正規化 0~1**（左上 0,0、右下 1,1）。但跨解析度真正靠的是 `tap_image`
+   圖像比對（座標只用於生成時「指出要裁哪個圖案」），runtime 找圖案而非去固定座標。
+   - 模板要**緊貼元件本體裁**（勿以點擊座標為中心切含背景的大方塊；背景隨解析度變會拉低比對）。
+   - 錄影建議用「要測的最高解析度」，模板縮小比對品質優於放大。
+   - 同方向才一起測（橫版錄勿測直版，版面會整個重排）。
+   - 能用 `tap_image` 就用；`tap_scene`（座標式）只留給點空白處/無可辨識圖案，跨解析度易點偏。
 
 3. **動作**（見 `gametest/script_model.py` 的 ACTIONS）：`tap / tap_image / long_press / long_press_image / swipe / wait / wait_image / assert_image / assert_absent / input_text / key / screenshot`。
 
