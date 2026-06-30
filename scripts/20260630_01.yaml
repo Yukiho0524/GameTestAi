@@ -1,0 +1,69 @@
+# 由 Claude 從 video1.mp4 分析產生（第一版草稿）
+# 遊戲：悍利商店 POCKET STORE（Gamania）橫版
+# 影片觀察流程：黑屏載入 → 標題畫面(進入遊戲) → 開 SRDebugger 輸入 AccountID 登入
+#               → 進遊戲(城市主畫面) → 開「便利機」選單 → 「投資項目」面板
+#
+# ⚠️ 第一版草稿，需用 `py run.py test scripts\20260630_01.yaml --once` 跑一次，
+#    再 `py run.py diagnose` 依建議調整座標/模板，press:auto 會自動試短點/長壓。
+#
+# ❓ 需要你補的資訊（見對話）：
+#    1. SRDebugger 除錯面板是怎麼叫出來的？（三指點？某角落？快捷鍵？）
+#    2. 每次測試要用哪個 AccountID 登入？（影片中用過 10 / 100）
+#    下面「除錯登入」整段先註解，補齊後我再啟用。
+
+name: 20260630_01
+description: 悍利商店 標題進入遊戲 + 跨解析度適配檢查（草稿）
+step_delay: 1.0
+
+# 冷啟動後先等標題畫面出現（吸收載入時間與起始錯位）
+anchor:
+  template: video1/title_logo.png
+  timeout: 60
+
+steps:
+  # === 主幹：從標題進入遊戲 ===
+  - action: tap_image
+    name: 點擊進入遊戲
+    template: video1/btn_enter_game.png
+    timeout: 20
+    press: auto                       # 不確定短點/長壓 → 自動試
+    reference: refs/20260630_01/01_title.png
+
+  - action: wait
+    name: 等待登入與載入
+    seconds: 10
+
+  # 確認真的進到遊戲主畫面（頂部資源列），這步判定成敗
+  - action: assert_image
+    name: 確認進入遊戲主畫面
+    template: video1/main_hud.png
+    timeout: 30
+    critical: true
+    reference_after: refs/20260630_01/08_ingame.png
+
+  - action: screenshot
+    name: 進入遊戲後截圖
+
+  # === 以下為除錯登入 / 探索流程，待補資訊後啟用（座標為影片估算，需校正）===
+  #
+  # - action: tap            # 叫出 SRDebugger 後，點 Enter AccountID 欄位
+  #   name: 點AccountID欄位
+  #   x: 0.36
+  #   y: 0.27
+  #   press: auto
+  # - action: input_text
+  #   name: 輸入AccountID
+  #   text: "100"
+  # - action: tap            # 輸入法的「確定」
+  #   name: 確定輸入
+  #   x: 0.97
+  #   y: 0.93
+  # - action: tap_image
+  #   name: 點Login
+  #   template: video1/btn_login.png
+  #   press: auto
+  #   reference: refs/20260630_01/05_debug_login.png
+  # - action: tap            # 關閉除錯面板 (X)
+  #   name: 關閉除錯面板
+  #   x: 0.975
+  #   y: 0.05
