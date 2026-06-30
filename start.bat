@@ -1,48 +1,52 @@
-﻿@echo off
-chcp 65001 >nul
+@echo off
 setlocal
 cd /d "%~dp0"
 
 echo ============================================
-echo   雷電手遊自動化測試系統  啟動中...
+echo   LDPlayer Mobile-Game Auto-Test Launcher
 echo ============================================
 
-REM 1) 檢查 Python 啟動器 py
+REM 1) Check Python launcher (py)
 where py >nul 2>nul
 if errorlevel 1 (
-    echo [錯誤] 找不到 Python 啟動器 ^(py^)，請先安裝 Python 3 並勾選 Add to PATH。
-    echo        下載：https://www.python.org/downloads/
+    echo [ERROR] Python launcher "py" not found.
+    echo         Install Python 3 and tick "Add python.exe to PATH".
+    echo         https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
-REM 2) 檢查必要套件，缺了就依 requirements.txt 安裝
-echo [檢查] 驗證 Python 套件 ...
+REM 2) Verify required packages; install from requirements.txt if any is missing
+echo [CHECK] Verifying Python packages ...
 py -c "import cv2, numpy, yaml, openpyxl" >nul 2>nul
 if errorlevel 1 (
-    echo [安裝] 偵測到缺少套件，開始安裝 requirements.txt ...
+    echo [SETUP] Missing packages detected. Installing requirements.txt ...
     py -m pip install -r requirements.txt
     if errorlevel 1 (
-        echo [錯誤] 套件安裝失敗，請檢查網路連線或 pip 設定。
+        echo [ERROR] Package install failed. Check your network / pip and retry.
         pause
         exit /b 1
     )
-) else (
-    echo [OK] 套件齊全。
 )
+echo [OK] Packages ready.
 
-REM 3) 執行主程式：無參數開圖形控制台；帶參數則直接傳給 run.py
-REM    例：start.bat devices  /  start.bat test scripts\20260630_01.yaml --once
-echo [啟動] 主程式 ...
+REM 3) Run main program.
+REM    No arguments  -> open GUI control panel
+REM    With arguments-> pass straight to run.py
+REM    e.g.  start.bat devices
+REM          start.bat test scripts\20260630_01.yaml --once
+echo [START] Launching main program ...
 if "%~1"=="" (
     py run.py gui
 ) else (
     py run.py %*
 )
+set RC=%ERRORLEVEL%
 
-if errorlevel 1 (
+if not "%RC%"=="0" (
     echo.
-    echo [注意] 主程式以非零狀態結束。
+    echo [WARN] Program exited with code %RC%.
+    echo        If the GUI did not open, run  py run.py gui  directly to see the error.
     pause
 )
 endlocal
