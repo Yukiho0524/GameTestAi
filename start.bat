@@ -31,14 +31,17 @@ if errorlevel 1 (
 echo [OK] Packages ready.
 
 REM 3) Run main program.
-REM    No arguments  -> open GUI control panel
-REM    With arguments-> pass straight to run.py
+REM    No arguments  -> auto-generate scripts for any new videos, then open GUI
+REM    With arguments-> pass straight to run.py (no autogen)
 REM    e.g.  start.bat devices
 REM          start.bat test scripts\20260630_01.yaml --once
-echo [START] Launching main program ...
 if "%~1"=="" (
+    echo [AUTOGEN] Checking for new videos ^(may call Claude and take a while^) ...
+    py run.py autogen
+    echo [START] Opening control panel ...
     py run.py gui
 ) else (
+    echo [START] Running: run.py %*
     py run.py %*
 )
 set RC=%ERRORLEVEL%
