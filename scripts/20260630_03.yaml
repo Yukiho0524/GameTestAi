@@ -1,0 +1,159 @@
+# 由 Claude 從 rec_20260630_124831.mp4 分析產生（1280x720）
+# 遊戲：悍利商店 POCKET STORE
+# 流程：
+#   主城 → 點擊「便利機」建築(開管理面板) → 關閉面板
+#   → 進入「黑鐵商店」布置模式 → 等開張(OPEN) → 查看任務
+#   → 商店內點擊「便利機」設備(再開管理面板) → 關閉面板
+#
+# ⚠ 無 taps.json，下列 tap_scene 座標為目測估算，需裝置校正：
+#   step「點擊便利機建築開面板」   → 城市中便利機建築座標
+#   step「進入黑鐵商店布置模式」   → 商店建築入口座標
+#   step「點擊商店內便利機設備」   → 店內便利機設備座標
+# 校正方式：py run.py test scripts60630_03.yaml --once 後看 diagnose。
+
+name: 20260630_03
+description: 便利機管理面板 → 黑鐵商店布置(OPEN開張) → 任務 → 店內便利機面板
+step_delay: 1.0
+
+anchor:
+  template: video1/main_hud.png
+  timeout: 120
+
+steps:
+  # === 確認主城已載入 ===
+  - action: assert_image
+    name: 確認主城HUD
+    template: video1/main_hud.png
+    timeout: 30
+    critical: true
+
+  - action: screenshot
+    name: 主城起始截圖
+
+  # === 點擊城市中「便利機」建築 → 開啟管理面板 ===
+  - action: tap_scene
+    name: 點擊便利機建築開面板  # [需校正] 城市便利機建築位置
+    reference: refs/rec_20260630_124831/01_city.png
+    x: 0.55
+    y: 0.62
+    scene_threshold: 0.55
+    press: auto
+
+  - action: wait_image
+    name: 確認便利機管理面板開啟
+    template: rec_20260630_124831/panel_benlinji.png
+    timeout: 10
+    critical: true
+
+  - action: screenshot
+    name: 便利機面板截圖
+
+  # === 關閉管理面板（X 按鈕）===
+  - action: tap_image
+    name: 關閉便利機面板X按鈕
+    template: rec_20260630_124831/btn_close_x.png
+    timeout: 8
+    press: auto
+
+  - action: wait
+    name: 等面板關閉
+    seconds: 1.0
+
+  - action: assert_image
+    name: 確認返回主城
+    template: video1/main_hud.png
+    timeout: 10
+    critical: true
+
+  - action: screenshot
+    name: 關閉面板後主城截圖
+
+  # === 進入黑鐵商店（布置模式）===
+  - action: tap_scene
+    name: 進入黑鐵商店布置模式  # [需校正] 商店建築入口座標
+    reference: refs/rec_20260630_124831/03_city_after_close.png
+    x: 0.40
+    y: 0.65
+    scene_threshold: 0.55
+    press: auto
+
+  - action: wait_image
+    name: 確認進入布置模式
+    template: rec_20260630_124831/ui_arrange_header.png
+    timeout: 15
+    critical: true
+    reference_after: refs/rec_20260630_124831/04_arrange_mode.png
+
+  - action: screenshot
+    name: 布置模式截圖
+
+  # === 等待「OPEN」開張標誌（布置完成後自動出現）===
+  - action: wait_image
+    name: 等待OPEN開張標誌
+    template: rec_20260630_124831/sign_open.png
+    timeout: 30
+
+  - action: assert_image
+    name: 確認OPEN開張標誌(成敗關鍵)
+    template: rec_20260630_124831/sign_open.png
+    timeout: 5
+    critical: true
+    reference_after: refs/rec_20260630_124831/05_open_sign.png
+
+  - action: screenshot
+    name: OPEN開張截圖
+
+  - action: wait
+    name: 等開張動畫結束
+    seconds: 2.0
+
+  # === 商店內 → 點擊任務面板按鈕 ===
+  - action: tap_image
+    name: 點擊任務(任務)面板按鈕
+    template: rec_20260630_124831/btn_task_tab.png
+    timeout: 10
+    press: auto
+
+  - action: wait
+    name: 等任務面板載入
+    seconds: 1.0
+
+  - action: screenshot
+    name: 任務面板截圖
+
+  - action: key
+    name: 返回鍵關閉任務面板
+    keycode: back
+
+  - action: wait
+    name: 等待返回商店
+    seconds: 1.5
+
+  # === 商店內點擊「便利機」設備 → 再次開啟管理面板 ===
+  - action: tap_scene
+    name: 點擊商店內便利機設備  # [需校正] 店內便利機設備座標
+    reference: refs/rec_20260630_124831/08_npc_hello.png
+    x: 0.45
+    y: 0.50
+    scene_threshold: 0.50
+    press: auto
+
+  - action: wait_image
+    name: 確認店內便利機面板開啟
+    template: rec_20260630_124831/panel_benlinji.png
+    timeout: 10
+    critical: true
+
+  - action: screenshot
+    name: 店內便利機面板截圖
+
+  - action: key
+    name: 返回鍵關閉店內面板
+    keycode: back
+
+  - action: wait
+    name: 等待關閉
+    seconds: 1.0
+
+  - action: screenshot
+    name: 結束截圖
