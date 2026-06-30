@@ -1,0 +1,125 @@
+# 由 Claude 從 rec_20260630_161559.mp4 分析產生（960x540）
+# 遊戲：便利商店口袋版 POCKET STORE（Gamania）
+# 流程：
+#   冷啟動 → Gamania 啟動畫面 → 標題畫面(查货中...)
+#   → 教程劇情自動播放（約 8 段，含進度條）→ 主城
+#   → 商品管理（開通商品 → 預約進貨 → 庫存管理）→ 返回主城
+#
+# 備注：
+#   - 教程劇情（frames 0016-0031）為自動播放，taps.json 為空，無需點擊推進
+#   - 商品管理入口座標 (0.93, 0.90) 沿用 20260630_02 校正值
+#   - rec_20260630_161559/main_hud.png 含 ♦0 金幣27590；帳號金幣不同時需更新模板
+#
+# ⚠ 待校正：
+#   step「開啟商品管理」→ 主城右側管理按鈕確切座標
+
+name: 20260630_04
+description: 便利商店 冷啟動→教程劇情自動播放→主城→商品管理（開通/預約進貨/庫存管理）
+step_delay: 1.0
+
+anchor:
+  template: video1/title_logo.png
+  timeout: 120
+
+steps:
+  # === 確認標題畫面（冷啟動後等待） ===
+  - action: assert_image
+    name: 確認標題畫面
+    template: video1/title_logo.png
+    timeout: 60
+    critical: true
+    reference_after: refs/rec_20260630_161559/00_title.png
+
+  - action: screenshot
+    name: 標題畫面截圖
+
+  # === 等待主城出現（含自動播放教程劇情約 30 秒）===
+  # 教程播放時右下角有 POCKET STORE watermark；進入主城後消失
+  - action: wait_image
+    name: 等待主城HUD出現
+    template: rec_20260630_161559/main_hud.png
+    timeout: 120
+    critical: true
+
+  - action: assert_absent
+    name: 確認教程載入畫面已結束
+    template: rec_20260630_161559/tutorial_loading.png
+    timeout: 5
+
+  - action: screenshot
+    name: 主城截圖
+
+  # === 開啟商品管理面板（入口需校正）===
+  - action: tap_scene
+    name: 開啟商品管理    # [需校正] 主城右側管理選單座標
+    reference: refs/rec_20260630_161559/02_mainmap.png
+    x: 0.93
+    y: 0.90
+    scene_threshold: 0.55
+    press: auto
+
+  - action: wait_image
+    name: 確認商品管理面板開啟
+    template: video2/panel_goods.png
+    timeout: 12
+    critical: true
+
+  - action: screenshot
+    name: 商品管理-開通商品截圖
+
+  # === 確認開通商品分頁（面板預設分頁，成敗關鍵）===
+  - action: assert_image
+    name: 確認開通商品分頁已選中
+    template: rec_20260630_161559/tab_kaitong.png
+    timeout: 5
+    critical: true
+    reference_after: refs/rec_20260630_161559/03_goods_kaitong.png
+
+  # === 切換到預約進貨分頁 ===
+  - action: tap_image
+    name: 點預約進貨分頁
+    template: video2/tab_preorder.png
+    timeout: 8
+    press: auto
+    reference: refs/rec_20260630_161559/03_goods_kaitong.png
+
+  - action: wait
+    name: 等預約進貨載入
+    seconds: 1.0
+
+  - action: screenshot
+    name: 預約進貨截圖
+
+  # === 切換到庫存管理分頁 ===
+  - action: tap_image
+    name: 點庫存管理分頁
+    template: video2/tab_stock.png
+    timeout: 8
+    press: auto
+    reference: refs/rec_20260630_161559/04_goods_preorder.png
+
+  - action: wait
+    name: 等庫存管理載入
+    seconds: 1.0
+
+  - action: screenshot
+    name: 庫存管理截圖
+
+  # === 關閉商品管理（返回鍵）===
+  - action: key
+    name: 返回鍵關閉商品管理
+    keycode: back
+
+  - action: wait
+    name: 等待返回主城
+    seconds: 1.5
+
+  - action: assert_image
+    name: 確認返回主城
+    template: rec_20260630_161559/main_hud.png
+    timeout: 10
+    critical: true
+    reference_after: refs/rec_20260630_161559/06_mainmap_end.png
+
+  - action: screenshot
+    name: 結束截圖
