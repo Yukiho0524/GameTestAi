@@ -38,12 +38,18 @@
 
 10. 參考既有範例：`scripts/20260630_01.yaml`（除錯登入流程）、`scripts/20260630_02.yaml`（進入遊戲+商品管理）、`scripts/example_login.yaml`、`scripts/prelude_baseline.yaml`。
 
-## 觸控標記（精準取得點擊位置）
+## 精確點擊位置（getevent，優先使用）
 
-若錄影有開雷電「顯示點按操作」，用 `gametest/touchdetect.py`（CLI `py run.py detect-taps <影片>`）
-可自動抓出每個點擊的時間、正規化座標、時長（長壓判定）。生成腳本時：
-依偵測到的座標，從「點擊前一刻」的影格裁出**被點的圖案**當模板 → `tap_image`；
-長壓（duration≥門檻）則用 `long_press_image`。`MarkerParams` 需用實際標記樣式校準。
+雷電不會把「顯示點按操作」標記畫進畫面，**但真實點擊會經過 `/dev/input/event2`**。
+透過 GUI「開始/停止錄影」錄製時，會同步用 getevent 擷取觸控，產生 **`<影片>.taps.json`**：
+每筆含 `t`(影片相對秒)、`nx,ny`(正規化座標)、`duration_ms`、`kind`(tap/long_press/swipe)。
+
+**生成腳本時，若來源影片有對應的 `.taps.json`：優先用它的精確座標**——
+對每筆觸控，從「`t` 當下（或前一幀）」的影格、以 `(nx,ny)` 為中心裁出**被點的圖案**當模板，
+產生 `tap_image`（kind=long_press → `long_press_image`，swipe → `swipe` 用 nx,ny→end_nx,end_ny）。
+這樣點擊位置是輸入層實測、不是估算。沒有 taps.json 時才退回看畫面判讀。
+
+（`gametest/touchdetect.py` 的影像偵測在雷電上不可靠，已被 getevent 取代。）
 
 ## 受測遊戲（目前）
 悍利商店 POCKET STORE（Gamania）。包體名 `com.gamania.pocketstorem.gama`。
