@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """雷電模擬器手遊自動化測試 CLI。
 
 用法：

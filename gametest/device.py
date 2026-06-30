@@ -18,12 +18,20 @@ class Device:
 
     # ---- 解析度 / 連線 ----
     def prepare(self, res: Resolution) -> None:
-        """套用解析度、啟動實例、連線 adb、等待開機完成。"""
+        """套用解析度、開啟雷電、等裝置出現、等開機完成、連線 adb。"""
+        print(f"  [1/3] 套用解析度 {res.label} 並開啟雷電 ...")
         self.console.apply_resolution_and_launch(self.index, res)
-        self.adb = connect_instance(self.cfg, self.index)
+
+        print("  [2/3] 等待裝置上線（雷電開機中，adb 可能要一陣子才抓到）...")
+        self.adb = connect_instance(
+            self.cfg, self.index,
+            on_wait=lambda s: print(f"        ...等待中 {s}s", end="\r", flush=True))
+
+        print("\n  [3/3] 等待 Android 開機完成 ...")
         if not self.adb.wait_boot(self.cfg.boot_timeout):
             raise TimeoutError(f"實例 {self.index} 在 {self.cfg.boot_timeout}s 內未開機完成")
         self._size = self.adb.screen_size()
+        print(f"        裝置就緒：{self.adb.serial}，解析度 {self._size[0]}x{self._size[1]}")
 
     @property
     def size(self) -> tuple[int, int]:
@@ -37,10 +45,16 @@ class Device:
 
     # ---- App ----
     def start_app(self) -> None:
-        self.console.run_app(self.index, self.cfg.package_name)
+        # 用 adb am start -n <pkg/activity> 啟動（失敗退回 monkey）
+        how = self.adb.start_app(self.cfg.package_name)
+        print(f"        啟動 App（{how}）")
 
     def stop_app(self) -> None:
-        self.console.kill_app(self.index, self.cfg.package_name)
+        # 用 adb am force-stop 確保乾淨狀態
+        if self.adb:
+            self.adb.force_stop(self.cfg.package_name)
+        else:
+            self.console.kill_app(self.index, self.cfg.package_name)
 
     # ---- 操作（正規化座標）----
     def tap(self, x: float, y: float) -> None:

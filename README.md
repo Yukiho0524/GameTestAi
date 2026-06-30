@@ -226,7 +226,8 @@ GameTestAi/
 
 ## 設計重點
 
-- **解析度切換**：`ldconsole modify --resolution W,H,DPI` 需在實例關閉時設定，下次啟動才生效。`Device.prepare()` 會自動「關閉 → 設定 → 啟動 → 等開機完成」。
+- **解析度切換 + 開機等待**：`ldconsole modify --resolution W,H,DPI` 需在實例關閉時設定，下次啟動才生效。`Device.prepare()` 會自動「關閉 → 設定 → 開啟雷電 → **輪詢等裝置上線**（剛開機 adb 抓不到，會重試到出現）→ 等 Android 開機完成 → 連線」。
+- **啟動 App**：用 `adb shell am start -n <pkg/activity>`（自動解析 launcher activity；解析不到則退回 monkey LAUNCHER），再跑腳本。
 - **截圖正確性**：用 `adb exec-out screencap -p` 取原始位元組，避免 Windows CRLF 破壞 PNG。
 - **跨解析度比對**：`matcher.py` 以 `scale_min~scale_max` 多尺度縮放模板，吸收解析度差異。若比對不穩，調高 `assets` 圖品質或降低 `matching.threshold`。
 ```

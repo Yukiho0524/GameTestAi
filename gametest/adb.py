@@ -98,6 +98,36 @@ class Adb:
     def home(self) -> None:
         self.keyevent(3)
 
+    # ---- 啟動 App ----
+    def resolve_launch_activity(self, package: str) -> str | None:
+        """解析 App 的啟動 Activity，回傳 'pkg/.Activity' 元件字串。"""
+        try:
+            out = self.shell("cmd", "package", "resolve-activity", "--brief", package)
+        except AdbError:
+            return None
+        for line in reversed(out.splitlines()):
+            line = line.strip()
+            if "/" in line and line.startswith(package):
+                return line
+        return None
+
+    def start_app(self, package: str) -> str:
+        """啟動 App：優先 am start -n <pkg/activity>，失敗退回 monkey。回傳採用方式。"""
+        comp = self.resolve_launch_activity(package)
+        if comp:
+            self.shell("am", "start", "-n", comp)
+            return f"am start -n {comp}"
+        # 退回：用 monkey 觸發 LAUNCHER intent（不需知道 Activity）
+        self.shell("monkey", "-p", package,
+                   "-c", "android.intent.category.LAUNCHER", "1")
+        return "monkey LAUNCHER"
+
+    def force_stop(self, package: str) -> None:
+        try:
+            self.shell("am", "force-stop", package)
+        except AdbError:
+            pass
+
     # ---- logcat（崩潰/ANR 偵測）----
     def logcat_clear(self) -> None:
         try:
@@ -129,31 +159,47 @@ class Adb:
         return hits
 
 
-def connect_instance(cfg: Config, index: int) -> Adb:
+def _find_device(adb_path: str, serial: str) -> str | None:
+    """嘗試連線並從 adb devices 找出可用裝置 serial；找不到回 None。"""
+    subprocess.run([adb_path, "connect", serial], capture_output=True, timeout=20)
+    devices = _list_devices(adb_path)
+    if serial in devices:
+        return serial
+    if len(devices) == 1:
+        return devices[0]
+    for d in devices:
+        if d.startswith("emulator-") or d.startswith("127.0.0.1"):
+            return d
+    return None
+
+
+def connect_instance(cfg: Config, index: int, timeout: int | None = None,
+                     on_wait=None) -> Adb:
     """連線指定雷電實例，回傳鎖定 serial 的 Adb。
 
-    策略：先試 127.0.0.1:(base_port + index*2)，失敗則退回掃描 adb devices。
+    雷電剛啟動時 adb 抓不到裝置，故會「輪詢重試」直到裝置出現或逾時。
+    timeout 預設用 cfg.boot_timeout；on_wait(秒) 可回報等待進度。
     """
     adb_path = cfg.adb_path
     port = cfg.adb_base_port + index * 2
     serial = f"127.0.0.1:{port}"
+    timeout = cfg.boot_timeout if timeout is None else timeout
 
-    subprocess.run([adb_path, "connect", serial], capture_output=True, timeout=20)
-    devices = _list_devices(adb_path)
-
-    if serial in devices:
-        return Adb(cfg, serial)
-
-    # 退回：若只有一台，直接用；否則挑第一台 emulator-/127.0.0.1
-    if len(devices) == 1:
-        return Adb(cfg, devices[0])
-    for d in devices:
-        if d.startswith("emulator-") or d.startswith("127.0.0.1"):
-            return Adb(cfg, d)
+    start = time.time()
+    while True:
+        found = _find_device(adb_path, serial)
+        if found:
+            return Adb(cfg, found)
+        waited = time.time() - start
+        if waited >= timeout:
+            break
+        if on_wait:
+            on_wait(int(waited))
+        time.sleep(2)
 
     raise AdbError(
-        f"找不到可用裝置。預期 {serial}，adb devices 回傳: {devices or '無'}。"
-        "請確認雷電實例已啟動。"
+        f"等待 {timeout}s 仍找不到可用裝置（預期 {serial}）。"
+        "請確認雷電實例已啟動、adb 埠正確（settings.yaml adb_base_port）。"
     )
 
 
