@@ -7,6 +7,7 @@
   py run.py apps [--filter 關鍵字]            # 列出模擬器已安裝套件
   py run.py verify-app [包體名]               # 驗證可用 ADB 開啟 App
   py run.py watch [--watch] [--force]        # 監看影片來源資料夾，新影片自動抽幀
+  py run.py autogen [--watch]                # 新影片自動呼叫 Claude 生成腳本並推 git
   py run.py extract <影片> [--every 1.0]      # 手動對單一影片抽幀
   py run.py capture <輸出.png>                # 截一張目前畫面（製作模板圖用）
   py run.py test <腳本.yaml> [--repeat N]     # 執行測試並輸出報告
@@ -117,6 +118,13 @@ def cmd_watch(args):
     watch_run(cfg, watch=args.watch, force=args.force)
 
 
+def cmd_autogen(args):
+    cfg = load_config(args.config)
+    from gametest.autogen import run as autogen_run
+    print(f"影片來源：{cfg.video_source_dir}")
+    autogen_run(cfg, watch=args.watch)
+
+
 def cmd_capture(args):
     cfg = load_config(args.config)
     from gametest.device import Device
@@ -205,6 +213,10 @@ def main(argv=None):
     sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
     sp.add_argument("--force", action="store_true", help="即使已抽過幀也重抽")
     sp.set_defaults(func=cmd_watch)
+
+    sp = sub.add_parser("autogen", help="偵測新影片→抽幀→呼叫 Claude 自動生成腳本並推 git")
+    sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
+    sp.set_defaults(func=cmd_autogen)
 
     sp = sub.add_parser("capture", help="截目前畫面")
     sp.add_argument("output")
