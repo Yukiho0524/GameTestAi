@@ -3,6 +3,9 @@
 
 用法：
   py run.py devices                          # 列出雷電實例與 adb 裝置
+  py run.py presets                          # 列出解析度預設（直版/橫版）
+  py run.py apps [--filter 關鍵字]            # 列出模擬器已安裝套件
+  py run.py verify-app [包體名]               # 驗證可用 ADB 開啟 App
   py run.py watch [--watch] [--force]        # 監看影片來源資料夾，新影片自動抽幀
   py run.py extract <影片> [--every 1.0]      # 手動對單一影片抽幀
   py run.py capture <輸出.png>                # 截一張目前畫面（製作模板圖用）
@@ -48,6 +51,56 @@ def cmd_extract(args):
     print("\n下一步：把這些圖交給 Claude 分析，產生 scripts/*.yaml 測試腳本。")
     if frames:
         print(f"圖片資料夾：{frames[0].parent}")
+
+
+def cmd_presets(args):
+    from gametest import resolutions as R
+    print("== 橫版 Landscape ==")
+    for p in R.LANDSCAPE:
+        print(f"  {p.key:14s} {p.label}  (dpi={p.dpi})")
+    print("\n== 直版 Portrait ==")
+    for p in R.PORTRAIT:
+        print(f"  {p.key:14s} {p.label}  (dpi={p.dpi})")
+    print("\n在 settings.yaml 用 test.resolution_presets: [key, ...] 引用。")
+
+
+def _connect_adb(cfg):
+    from gametest.adb import connect_instance
+    from gametest.ldplayer import LDConsole
+    console = LDConsole(cfg)
+    if not console.is_running(cfg.instance_index):
+        print(f"實例 {cfg.instance_index} 未執行，正在啟動 ...")
+        console.launch(cfg.instance_index)
+    adb = connect_instance(cfg, cfg.instance_index)
+    adb.wait_boot(cfg.boot_timeout)
+    return adb
+
+
+def cmd_apps(args):
+    cfg = load_config(args.config)
+    from gametest.appcheck import list_packages
+    adb = _connect_adb(cfg)
+    pkgs = list_packages(adb, args.filter or "")
+    print(f"已安裝套件（{len(pkgs)}）：")
+    for p in pkgs:
+        print(f"  {p}")
+
+
+def cmd_verify_app(args):
+    cfg = load_config(args.config)
+    pkg = args.package or cfg.package_name
+    if not pkg:
+        print("請提供包體名：py run.py verify-app <package>，或在 settings.yaml 設定 package_name")
+        return
+    from gametest.appcheck import launch_and_verify
+    adb = _connect_adb(cfg)
+    print(f"驗證 App：{pkg}")
+    r = launch_and_verify(adb, pkg)
+    print(f"  已安裝：{'是' if r.installed else '否'}")
+    print(f"  已啟動：{'是' if r.launched else '否'}")
+    print(f"  進入前景：{'是' if r.foreground else '否'}")
+    print(f"  結果：{r.message}")
+    print("✅ 可用 ADB 開啟此 App" if r.ok else "❌ 無法確認可正常開啟，請檢查包體名")
 
 
 def cmd_watch(args):
@@ -110,6 +163,17 @@ def main(argv=None):
     sp.add_argument("--every", type=float, default=1.0, help="每幾秒抽一張")
     sp.add_argument("--max", type=int, default=0, help="最多抽幾張 (0=不限)")
     sp.set_defaults(func=cmd_extract)
+
+    sp = sub.add_parser("presets", help="列出解析度預設（直版/橫版）")
+    sp.set_defaults(func=cmd_presets)
+
+    sp = sub.add_parser("apps", help="列出模擬器已安裝套件")
+    sp.add_argument("--filter", help="關鍵字過濾")
+    sp.set_defaults(func=cmd_apps)
+
+    sp = sub.add_parser("verify-app", help="驗證可用 ADB 開啟指定 App")
+    sp.add_argument("package", nargs="?", help="包體名（省略則用 settings.yaml）")
+    sp.set_defaults(func=cmd_verify_app)
 
     sp = sub.add_parser("watch", help="監看影片來源資料夾，對新影片自動抽幀")
     sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")

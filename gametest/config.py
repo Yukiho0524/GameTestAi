@@ -88,12 +88,21 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     paths = data.get("paths", {})
     watch = data.get("watch", {})
 
-    resolutions = [
-        Resolution(width=r["width"], height=r["height"], dpi=r.get("dpi", 240))
-        for r in test.get("resolutions", [])
-    ]
+    # 解析度可用兩種方式指定：
+    #   1) resolution_presets: [預設 key, ...]（引用 resolutions.py 的預設庫）
+    #   2) resolutions: [{width,height,dpi}, ...]（直接寫死）
+    # 兩者皆給時，presets 優先。
+    preset_keys = test.get("resolution_presets", [])
+    if preset_keys:
+        from .resolutions import resolve_keys  # 延遲匯入避免循環
+        resolutions = resolve_keys(preset_keys)
+    else:
+        resolutions = [
+            Resolution(width=r["width"], height=r["height"], dpi=r.get("dpi", 240))
+            for r in test.get("resolutions", [])
+        ]
     if not resolutions:
-        raise ValueError("settings.yaml 至少要設定一個解析度")
+        raise ValueError("settings.yaml 至少要設定一個解析度（resolution_presets 或 resolutions）")
 
     return Config(
         raw=data,
