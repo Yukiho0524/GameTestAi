@@ -108,13 +108,32 @@ class App(tk.Tk):
         self.log = tk.Text(self, height=8, state="disabled", wrap="word")
         self.log.pack(fill="both", expand=False, padx=8, pady=4)
 
-    def _refresh_scripts(self):
-        scripts = [p.name for p in sorted(self.cfg.scripts_dir.glob("*.y*ml"))]
+        # 定時偵測 scripts 資料夾，有新腳本立即出現在清單
+        self.after(3000, self._poll_scripts)
+
+    def _list_scripts(self):
+        return [p.name for p in sorted(self.cfg.scripts_dir.glob("*.y*ml"))]
+
+    def _refresh_scripts(self, select_newest: bool = False):
+        scripts = self._list_scripts()
+        self._script_cache = scripts
         self.script_combo["values"] = scripts
-        if scripts and self.script_var.get() not in scripts:
+        if select_newest and scripts:
+            newest = max(self.cfg.scripts_dir.glob("*.y*ml"),
+                         key=lambda p: p.stat().st_mtime).name
+            self.script_var.set(newest)
+        elif scripts and self.script_var.get() not in scripts:
             self.script_combo.current(0)
         elif not scripts:
             self.script_var.set("")
+
+    def _poll_scripts(self):
+        """定時偵測 scripts 資料夾變化，有新/刪腳本就更新清單（保留目前選擇）。"""
+        try:
+            if self._list_scripts() != getattr(self, "_script_cache", None):
+                self._refresh_scripts()
+        finally:
+            self.after(3000, self._poll_scripts)
 
     def _on_delete_script(self):
         script = self.script_var.get()
@@ -229,7 +248,7 @@ class App(tk.Tk):
 
         def done(res, err):
             self.gen_btn.config(state="normal")
-            self._refresh_scripts()
+            self._refresh_scripts(select_newest=True)
             if err:
                 self._set_status("生成失敗")
                 self._log(f"[生成] 錯誤：{err}")
