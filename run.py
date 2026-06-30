@@ -9,6 +9,7 @@
   py run.py watch [--watch] [--force]        # 監看影片來源資料夾，新影片自動抽幀
   py run.py autogen [--watch]                # 新影片自動呼叫 Claude 生成腳本並推 git
   py run.py extract <影片> [--every 1.0]      # 手動對單一影片抽幀
+  py run.py show-taps [on|off]               # 用 ADB 開/關「顯示點按操作」
   py run.py capture <輸出.png>                # 截一張目前畫面（製作模板圖用）
   py run.py test <腳本.yaml> [--repeat N]     # 執行測試並輸出報告
   py run.py test <腳本.yaml> --once           # 快速模式：單解析度單次（修腳本用）
@@ -125,6 +126,21 @@ def cmd_autogen(args):
     autogen_run(cfg, watch=args.watch)
 
 
+def cmd_show_taps(args):
+    cfg = load_config(args.config)
+    on = args.state != "off"
+    adb = _connect_adb(cfg)
+    val = "1" if on else "0"
+    adb.shell("settings", "put", "system", "show_touches", val)
+    if args.pointer:
+        adb.shell("settings", "put", "system", "pointer_location", val)
+    # 確認
+    cur = adb.shell("settings", "get", "system", "show_touches").strip()
+    print(f"顯示點按操作 show_touches = {cur}（{'開啟' if on else '關閉'}）"
+          + ("，指標位置一併" + ("開啟" if on else "關閉") if args.pointer else ""))
+    print("現在去遊戲裡操作，點擊就會顯示圓點標記，再錄影即可。")
+
+
 def cmd_detect_taps(args):
     cfg = load_config(args.config)
     cfg.ensure_dirs()
@@ -229,6 +245,12 @@ def main(argv=None):
     sp = sub.add_parser("autogen", help="偵測新影片→抽幀→呼叫 Claude 自動生成腳本並推 git")
     sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
     sp.set_defaults(func=cmd_autogen)
+
+    sp = sub.add_parser("show-taps", help="用 ADB 開/關 Android『顯示點按操作』(免找選單)")
+    sp.add_argument("state", nargs="?", default="on", choices=["on", "off"],
+                    help="on 開啟（預設）/ off 關閉")
+    sp.add_argument("--pointer", action="store_true", help="一併開/關『指標位置』(全螢幕十字)")
+    sp.set_defaults(func=cmd_show_taps)
 
     sp = sub.add_parser("detect-taps", help="從『顯示點按操作』錄影偵測點擊位置(校準用)")
     sp.add_argument("video")
