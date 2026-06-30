@@ -121,6 +121,22 @@ py run.py test scripts\example_login.yaml --repeat 10
 比對用的預期畫面來自腳本步驟的 `reference`（點擊前）與 `reference_after`（點擊後），
 由 AI 生成腳本時從影格自動存出。
 
+## 修正腳本的迭代流程
+
+影片無法 100% 判斷操作意圖（最常見：短點 vs 長壓），腳本可能跑不出預期。流程：
+
+```powershell
+py run.py test scripts\20260630_01.yaml --once   # 快速跑一次（單解析度單次）
+py run.py diagnose                               # 列出失敗/可疑步驟 + 修正建議
+```
+
+`diagnose` 會指出每個出問題的步驟、現象與建議，例如：
+- 「此步短點無反應、自動長壓才成功 → 建議改 `long_press` 或 `press: long`」
+- 「模板比對失敗 → 重截 template / 加 region / 調 threshold」
+- 「畫面與原影片差異大 → 可能是適配 BUG 或 reference 不準」
+
+依建議改腳本 → 再 `--once` 驗證 → 沒問題後跑完整 `test`。`press: auto` 能讓第一次跑就自動試出短點/長壓，減少手動來回。
+
 ## 錄影 → 自動命名 → 自動推 git
 
 `watch` 偵測新影片並抽幀後，請 Claude 分析產生腳本。腳本會：
@@ -149,6 +165,8 @@ py run.py test scripts\example_login.yaml --repeat 10
 
 - `critical: true` 的步驟失敗會讓整輪判為 FAIL；`assert_*` 預設即為 critical。
 - `region: [x1,y1,x2,y2]`（比例）可縮小圖像搜尋範圍，加速且更準。
+- **短點 vs 長壓分不清時用 `press`**：`tap` / `tap_image` 可加 `press: tap|long|auto`。
+  影片看不出是短點還長壓時就標 `press: auto` —— runtime 先短點，偵測到「點擊後無反應」會**自動改長壓重試並記錄實際生效的方式**，第一次跑完就知道答案。
 - **長壓**：`long_press` / `long_press_image` 用 `duration_ms` 控制按住時間（毫秒）。
 - **滑動**：`swipe` 的 `duration_ms` 越大滑越慢；甩動/翻頁用小值、拖曳用大值。
 - **文字輸入**：`input_text` 走 ADB `input text`，**只支援英數**。要輸入**中文**需在模擬器裝 [ADBKeyboard](https://github.com/senzhk/ADBKeyBoard) 並設為輸入法，跟我說一聲我再把 input_text 切成走 ADBKeyboard 廣播。

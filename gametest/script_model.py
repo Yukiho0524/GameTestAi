@@ -41,6 +41,9 @@ class Step:
     reference_after: str | None = None
     # 點擊後畫面是否應該改變（用於「點擊無反應」偵測），click 動作預設 True
     expect_change: bool | None = None
+    # 觸控方式（僅 tap/tap_image 有意義）：
+    #   "tap"=短點(預設)  "long"=長壓  "auto"=先短點，無反應自動改長壓並記錄實際結果
+    press: str = "tap"
 
     def __post_init__(self):
         if self.action not in ACTIONS:
@@ -49,6 +52,8 @@ class Step:
             self.name = self.action
         if self.expect_change is None:
             self.expect_change = self.action in CLICK_ACTIONS
+        if self.press not in ("tap", "long", "auto"):
+            raise ValueError(f"press 只能是 tap/long/auto，得到 '{self.press}'")
 
     @property
     def is_click(self) -> bool:
@@ -81,9 +86,10 @@ class TestScript:
             reference = raw.pop("reference", None)
             reference_after = raw.pop("reference_after", None)
             expect_change = raw.pop("expect_change", None)
+            press = raw.pop("press", "tap")
             steps.append(Step(action=action, name=name, params=raw, critical=critical,
                               reference=reference, reference_after=reference_after,
-                              expect_change=expect_change))
+                              expect_change=expect_change, press=press))
         return steps
 
     @classmethod

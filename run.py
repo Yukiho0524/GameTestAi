@@ -11,6 +11,8 @@
   py run.py extract <影片> [--every 1.0]      # 手動對單一影片抽幀
   py run.py capture <輸出.png>                # 截一張目前畫面（製作模板圖用）
   py run.py test <腳本.yaml> [--repeat N]     # 執行測試並輸出報告
+  py run.py test <腳本.yaml> --once           # 快速模式：單解析度單次（修腳本用）
+  py run.py diagnose [結果資料夾]              # 列出失敗步驟與修正建議
 """
 from __future__ import annotations
 
@@ -132,10 +134,21 @@ def cmd_capture(args):
     print(f"已存截圖：{out}（尺寸 {dev.size[0]}x{dev.size[1]}）")
 
 
+def cmd_diagnose(args):
+    cfg = load_config(args.config)
+    from gametest.diagnose import diagnose
+    rd = Path(args.result_dir) if args.result_dir else None
+    diagnose(cfg, rd)
+
+
 def cmd_test(args):
     cfg = load_config(args.config)
     if args.repeat:
         cfg.repeat = args.repeat
+    if args.once:
+        cfg.repeat = 1
+        cfg.resolutions = cfg.resolutions[:1]
+        print("[--once] 快速模式：單解析度單次")
     from gametest.script_model import TestScript
     from gametest.runner import run_suite
     from gametest.report import write_reports
@@ -201,8 +214,13 @@ def main(argv=None):
     sp = sub.add_parser("test", help="執行測試")
     sp.add_argument("script")
     sp.add_argument("--repeat", type=int, help="覆寫重複次數")
+    sp.add_argument("--once", action="store_true", help="快速模式：單解析度單次（修腳本時用）")
     sp.add_argument("--no-open", action="store_true", help="不要自動開啟報告")
     sp.set_defaults(func=cmd_test)
+
+    sp = sub.add_parser("diagnose", help="診斷最近一次測試，列出失敗步驟與修正建議")
+    sp.add_argument("result_dir", nargs="?", help="結果資料夾（省略則用最新）")
+    sp.set_defaults(func=cmd_diagnose)
 
     args = p.parse_args(argv)
     try:

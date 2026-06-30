@@ -32,6 +32,8 @@ class StepResult:
     bug_reason: str = ""
     detection: dict | None = None       # 適配偵測結果（黑屏/掉圖/解析度/黑邊）
     diff_boxes: list | None = None      # 點擊前後顯著差異區塊（正規化 bbox）
+    resolved_press: str | None = None   # press:auto 實際生效的觸控（tap/long）
+    escalated: bool = False             # 是否從短點自動升級為長壓
 
 
 class StepError(Exception):
@@ -79,6 +81,10 @@ def execute_step(
     before_name = ref_name = None
     detection = diff_boxes = None
     before_img = None
+    resolved_press = None
+    escalated = False
+    touch_loc = None          # ("norm", x, y) 或 ("pixel", px, py)，供 auto 升級長壓用
+    dur = int(p.get("duration_ms", 800))
 
     # 點擊類動作：先截「點擊前」畫面
     if step.is_click:
@@ -89,7 +95,12 @@ def execute_step(
 
     try:
         if step.action == "tap":
-            device.tap(float(p["x"]), float(p["y"]))
+            x, y = float(p["x"]), float(p["y"])
+            touch_loc = ("norm", x, y)
+            if step.press == "long":
+                device.long_press(x, y, dur)
+            else:
+                device.tap(x, y)
 
         elif step.action == "long_press":
             device.long_press(float(p["x"]), float(p["y"]),
@@ -135,9 +146,9 @@ def execute_step(
             score = result.score
             if step.action in ("tap_image", "long_press_image"):
                 if result.found and result.center:
-                    if step.action == "long_press_image":
-                        device.long_press_pixel(*result.center,
-                                                int(p.get("duration_ms", 800)))
+                    touch_loc = ("pixel", result.center[0], result.center[1])
+                    if step.action == "long_press_image" or step.press == "long":
+                        device.long_press_pixel(*result.center, dur)
                     else:
                         device.tap_pixel(*result.center)
                 else:
@@ -169,6 +180,26 @@ def execute_step(
         after_img = device.screencap()
     except Exception:
         after_img = None
+
+    # ===== press:auto 自我修正：短點若無反應，自動升級為長壓並記錄 =====
+    if (step.press == "auto" and ok and step.expect_change and touch_loc is not None
+            and before_img is not None and after_img is not None):
+        if compare.is_no_response(before_img, after_img):
+            kind = touch_loc[0]
+            if kind == "norm":
+                device.long_press(touch_loc[1], touch_loc[2], dur)
+            else:
+                device.long_press_pixel(touch_loc[1], touch_loc[2], dur)
+            time.sleep(0.6)
+            try:
+                after_img = device.screencap()
+            except Exception:
+                pass
+            escalated = True
+            resolved_press = "long"
+            msg = (msg + "；" if msg else "") + "短點無反應，已自動改長壓"
+        else:
+            resolved_press = "tap"
 
     # ===== 適配偵測（黑屏/掉圖/解析度/黑邊）：對動作後畫面 =====
     detect_img = after_img if after_img is not None else before_img
@@ -227,4 +258,5 @@ def execute_step(
         screenshot=shot_name, before_shot=before_name, ref_shot=ref_name,
         ref_similarity=ref_sim, after_similarity=after_sim,
         bug=bug, bug_reason=bug_reason, detection=detection, diff_boxes=diff_boxes,
+        resolved_press=resolved_press, escalated=escalated,
     )
