@@ -102,7 +102,31 @@ py run.py capture assets\raw_main.png
 py run.py test scripts\example_login.yaml --repeat 10
 ```
 
-執行完成後自動開啟 HTML 報告，路徑在 `results/<腳本名>_<時間>/report.html`。
+執行完成後自動開啟 **Excel 報告**，路徑在 `results/<腳本名>_<時間>/report.xlsx`
+（另有 `report.html` / `report.json` 備查）。
+
+## 適配檢查報告（Excel）
+
+報告主訴求是抓「各解析度下、模擬器跑是否會**圖歪 / 掉圖**」這類適配問題：
+
+- **一個解析度一個頁籤** + 一個「總覽」頁，記錄測試次數、通過率、BUG 步驟數、崩潰次數
+- **每次點擊前後都截圖**，與原影片對應畫面做正規化 SSIM 比對（跨解析度可比）
+- 判定為 **BUG** 並在「BUG 明細」內嵌 `原影片 / 點擊前 / 點擊後` 縮圖的情況：
+  - 點擊前畫面與原影片相似度過低（圖歪/版面跑掉）
+  - 點擊後畫面無變化（按鈕無反應）或與預期結果不符（流程跑掉）
+  - 黑屏 / 純色 / 掉圖、洋紅占位（材質遺失）
+  - 實際解析度與預期不符、letterbox 黑邊比例異常
+  - logcat 偵測到 App 崩潰 / ANR
+
+比對用的預期畫面來自腳本步驟的 `reference`（點擊前）與 `reference_after`（點擊後），
+由 AI 生成腳本時從影格自動存出。
+
+## 錄影 → 自動命名 → 自動推 git
+
+`watch` 偵測新影片並抽幀後，請 Claude 分析產生腳本。腳本會：
+- **自動命名**為 `當天日期_當天第幾隻`（例 `20260630_01.yaml`、`20260630_02.yaml`）
+- 影片↔腳本對應記在 `scripts/.video_index.json`，避免重複生成
+- 自動 `git commit`（`[Hibari] ...`）並 `push origin main`
 
 ## 腳本格式
 

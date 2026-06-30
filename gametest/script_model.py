@@ -22,6 +22,10 @@ ACTIONS = {
 }
 
 
+# 會「點擊」的動作（需做點擊前後截圖與適配比對）
+CLICK_ACTIONS = {"tap", "tap_image"}
+
+
 @dataclass
 class Step:
     action: str
@@ -29,12 +33,24 @@ class Step:
     params: dict[str, Any] = field(default_factory=dict)
     # 此步驟是否計入成敗判定（assert_* 預設 True，其餘 False）
     critical: bool = False
+    # 適配比對用：原影片中此步驟「點擊前」的預期畫面（相對 assets/ 或絕對路徑）
+    reference: str | None = None
+    # 原影片中「點擊後」的預期畫面（選用，用來判定點擊後是否跑掉）
+    reference_after: str | None = None
+    # 點擊後畫面是否應該改變（用於「點擊無反應」偵測），click 動作預設 True
+    expect_change: bool | None = None
 
     def __post_init__(self):
         if self.action not in ACTIONS:
             raise ValueError(f"未知動作 '{self.action}'，可用: {sorted(ACTIONS)}")
         if not self.name:
             self.name = self.action
+        if self.expect_change is None:
+            self.expect_change = self.action in CLICK_ACTIONS
+
+    @property
+    def is_click(self) -> bool:
+        return self.action in CLICK_ACTIONS
 
 
 @dataclass
@@ -60,7 +76,12 @@ class TestScript:
             action = raw.pop("action")
             name = raw.pop("name", "")
             critical = raw.pop("critical", action in ("assert_image", "assert_absent"))
-            steps.append(Step(action=action, name=name, params=raw, critical=critical))
+            reference = raw.pop("reference", None)
+            reference_after = raw.pop("reference_after", None)
+            expect_change = raw.pop("expect_change", None)
+            steps.append(Step(action=action, name=name, params=raw, critical=critical,
+                              reference=reference, reference_after=reference_after,
+                              expect_change=expect_change))
         return steps
 
     @classmethod

@@ -27,10 +27,15 @@ steps:
     timeout: 30
 
   # 點擊「開始遊戲」按鈕（找到圖片才點，最穩定，跨解析度可用）
+  # reference / reference_after：原影片中此步驟「點擊前 / 點擊後」的預期畫面，
+  #   runtime 會截圖跟它比對相似度 → 抓圖歪/掉圖，並判定點擊後是否跑掉(BUG)。
+  #   這兩個檔由 AI 生成腳本時從影格自動存出，放在 assets/ 或 frames 資料夾。
   - action: tap_image
     name: 點擊開始遊戲
     template: btn_start.png
     timeout: 15
+    reference: refs/example_login/02_title.png
+    reference_after: refs/example_login/03_loading.png
 
   # 也可以用純座標點擊（比例座標）
   - action: tap

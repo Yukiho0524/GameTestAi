@@ -205,13 +205,13 @@ class App(tk.Tk):
         self._log(f"[測試] {script} 解析度={keys} 重複={self.cfg.repeat}")
 
         def task():
-            from .report import write_reports
+            from .report_excel import write_excel
             from .runner import run_suite
             from .script_model import TestScript
             ts = TestScript.load(self.cfg.scripts_dir / script)
             suite, root = run_suite(self.cfg, ts)
-            _, html = write_reports(suite, root)
-            return suite, html
+            xlsx = write_excel(suite, root)
+            return suite, xlsx
 
         def done(res, err):
             if err:
@@ -219,12 +219,13 @@ class App(tk.Tk):
                 self._log(f"[錯誤] {err}")
                 messagebox.showerror("測試失敗", str(err))
                 return
-            suite, html = res
+            suite, xlsx = res
             rate = suite.success_rate()
-            self._set_status(f"完成，總成功率 {rate:.1f}%")
-            self._log(f"[測試] 完成，總成功率 {rate:.1f}%，報告：{html}")
+            bugs = sum(r.bug_count for r in suite.runs)
+            self._set_status(f"完成，總成功率 {rate:.1f}%，BUG {bugs}")
+            self._log(f"[測試] 完成，總成功率 {rate:.1f}%，BUG 步驟 {bugs}，報告：{xlsx}")
             import webbrowser
-            webbrowser.open(html.as_uri())
+            webbrowser.open(xlsx.as_uri())
         self._run_bg(task, done)
 
 

@@ -139,6 +139,7 @@ def cmd_test(args):
     from gametest.script_model import TestScript
     from gametest.runner import run_suite
     from gametest.report import write_reports
+    from gametest.report_excel import write_excel
 
     script = TestScript.load(args.script)
     print(f"載入腳本：{script.name} — {script.description}")
@@ -146,14 +147,18 @@ def cmd_test(args):
 
     suite, root = run_suite(cfg, script)
     json_path, html_path = write_reports(suite, root)
+    xlsx_path = write_excel(suite, root)
 
     print(f"\n總成功率：{suite.success_rate():.1f}%")
     for res in suite.resolutions:
-        print(f"  {res}: {suite.success_rate(res):.1f}%")
-    print(f"\nJSON 報告：{json_path}")
+        runs = [x for x in suite.runs if x.resolution == res]
+        bugs = sum(x.bug_count for x in runs)
+        print(f"  {res}: {suite.success_rate(res):.1f}%（BUG 步驟 {bugs}）")
+    print(f"\nExcel 報告：{xlsx_path}")
     print(f"HTML 報告：{html_path}")
+    print(f"JSON 報告：{json_path}")
     if not args.no_open:
-        webbrowser.open(html_path.as_uri())
+        webbrowser.open(xlsx_path.as_uri())
 
 
 def main(argv=None):

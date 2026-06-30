@@ -25,9 +25,13 @@ def _is_video(path: Path, cfg: Config) -> bool:
 
 
 def _has_script(cfg: Config, video: Path) -> bool:
-    """影片是否已有對應腳本 scripts/<stem>.yaml。"""
-    return (cfg.scripts_dir / f"{video.stem}.yaml").exists() or \
-           (cfg.scripts_dir / f"{video.stem}.yml").exists()
+    """影片是否已有對應腳本（查 scripts/.video_index.json 對應表）。"""
+    from .scriptgen import script_for_video
+    name = script_for_video(cfg, video.name)
+    if not name:
+        return False
+    return (cfg.scripts_dir / f"{name}.yaml").exists() or \
+           (cfg.scripts_dir / f"{name}.yml").exists()
 
 
 def _frames_done(cfg: Config, video: Path) -> bool:
@@ -78,8 +82,8 @@ def _print_pending(pending: list[PendingVideo]) -> None:
     for p in pending:
         print(f"  • {p.video.name}")
         print(f"      影格：{p.frames_dir}（{p.frame_count} 張）")
-        print(f"      目標腳本：scripts/{p.video.stem}.yaml")
-    print("\n下一步：在對話中跟 Claude 說「分析 <影片名>」，我會看影格產生腳本。")
+    print("\n下一步：在對話中跟 Claude 說「分析 <影片名>」，我會看影格產生腳本，"
+          "依當天日期自動命名（YYYYMMDD_NN）並自動推上 git。")
 
 
 def watch_loop(cfg: Config) -> None:

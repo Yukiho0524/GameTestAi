@@ -98,6 +98,36 @@ class Adb:
     def home(self) -> None:
         self.keyevent(3)
 
+    # ---- logcat（崩潰/ANR 偵測）----
+    def logcat_clear(self) -> None:
+        try:
+            subprocess.run([*self._base(), "logcat", "-c"],
+                           capture_output=True, timeout=15)
+        except Exception:
+            pass
+
+    def logcat_scan_crashes(self, package: str = "") -> list[str]:
+        """傾印 logcat 並掃 FATAL/ANR/crash。回傳命中的行（去重）。"""
+        try:
+            proc = subprocess.run([*self._base(), "logcat", "-d"],
+                                  capture_output=True, text=True,
+                                  errors="replace", timeout=30)
+        except Exception as e:  # noqa: BLE001
+            return [f"(logcat 讀取失敗: {e})"]
+        hits, seen = [], set()
+        keys = ("FATAL EXCEPTION", "ANR in", "force-finishing", "CRASH",
+                "java.lang.", "Process crashed", "signal 11", "tombstoned")
+        for line in proc.stdout.splitlines():
+            if any(k in line for k in keys):
+                if package and package not in line and "ANR in" not in line \
+                        and "FATAL" not in line:
+                    continue
+                s = line.strip()
+                if s not in seen:
+                    seen.add(s)
+                    hits.append(s)
+        return hits
+
 
 def connect_instance(cfg: Config, index: int) -> Adb:
     """連線指定雷電實例，回傳鎖定 serial 的 Adb。
