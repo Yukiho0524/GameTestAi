@@ -122,6 +122,28 @@ class Adb:
                    "-c", "android.intent.category.LAUNCHER", "1")
         return "monkey LAUNCHER"
 
+    # ---- 螢幕錄影（會錄到 show_touches 觸控標記）----
+    def screenrecord(self, seconds: int, local_path: str,
+                     bitrate: int = 8_000_000) -> None:
+        """用 adb screenrecord 錄影 seconds 秒，pull 回 local_path。
+
+        相較雷電內建錄影，screenrecord 會把系統觸控疊層(顯示點按操作)一起錄進去。
+        """
+        dev = "/sdcard/gametest_rec.mp4"
+        self.shell("rm", "-f", dev)
+        subprocess.run(
+            [*self._base(), "shell", "screenrecord",
+             "--time-limit", str(seconds), "--bit-rate", str(bitrate), dev],
+            capture_output=True, timeout=seconds + 60,
+        )
+        # screenrecord 結束後檔案才完整，pull 回本機
+        subprocess.run([*self._base(), "pull", dev, local_path],
+                       capture_output=True, timeout=120)
+        try:
+            self.shell("rm", "-f", dev)
+        except AdbError:
+            pass
+
     def force_stop(self, package: str) -> None:
         try:
             self.shell("am", "force-stop", package)

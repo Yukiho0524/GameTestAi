@@ -10,6 +10,7 @@
   py run.py autogen [--watch]                # 新影片自動呼叫 Claude 生成腳本並推 git
   py run.py extract <影片> [--every 1.0]      # 手動對單一影片抽幀
   py run.py show-taps [on|off]               # 用 ADB 開/關「顯示點按操作」
+  py run.py record [秒數]                      # 用 adb screenrecord 錄影（含觸控標記）
   py run.py capture <輸出.png>                # 截一張目前畫面（製作模板圖用）
   py run.py test <腳本.yaml> [--repeat N]     # 執行測試並輸出報告
   py run.py test <腳本.yaml> --once           # 快速模式：單解析度單次（修腳本用）
@@ -124,6 +125,23 @@ def cmd_autogen(args):
     from gametest.autogen import run as autogen_run
     print(f"影片來源：{cfg.video_source_dir}")
     autogen_run(cfg, watch=args.watch)
+
+
+def cmd_record(args):
+    cfg = load_config(args.config)
+    cfg.ensure_dirs()
+    from datetime import datetime
+    adb = _connect_adb(cfg)
+    # 確保觸控標記開著（這樣錄到的影片才有點擊圓點）
+    adb.shell("settings", "put", "system", "show_touches", "1")
+    out = args.output
+    if not out:
+        out = str(cfg.video_source_dir / f"rec_{datetime.now():%Y%m%d_%H%M%S}.mp4")
+    print(f"開始錄影 {args.seconds} 秒（已開啟顯示點按操作）...")
+    print("請現在到模擬器裡操作；時間到會自動停止並存檔。")
+    adb.screenrecord(args.seconds, out)
+    print(f"錄影完成：{out}")
+    print("接著可 py run.py detect-taps 該檔 檢視點擊偵測，或丟進來源夾讓 autogen 處理。")
 
 
 def cmd_show_taps(args):
@@ -245,6 +263,11 @@ def main(argv=None):
     sp = sub.add_parser("autogen", help="偵測新影片→抽幀→呼叫 Claude 自動生成腳本並推 git")
     sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
     sp.set_defaults(func=cmd_autogen)
+
+    sp = sub.add_parser("record", help="用 adb screenrecord 錄影(會錄到觸控標記)")
+    sp.add_argument("seconds", type=int, nargs="?", default=20, help="錄影秒數(預設20，上限180)")
+    sp.add_argument("--output", help="輸出檔(預設存到影片來源夾 rec_時間.mp4)")
+    sp.set_defaults(func=cmd_record)
 
     sp = sub.add_parser("show-taps", help="用 ADB 開/關 Android『顯示點按操作』(免找選單)")
     sp.add_argument("state", nargs="?", default="on", choices=["on", "off"],
