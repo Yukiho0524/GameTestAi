@@ -10,7 +10,7 @@ from pathlib import Path
 from .actions import StepResult, execute_step
 from .config import Config, Resolution
 from .device import Device
-from .script_model import TestScript
+from .script_model import Step, TestScript
 
 
 @dataclass
@@ -39,6 +39,18 @@ class Suite:
         return sum(1 for r in runs if r.passed) / len(runs) * 100.0
 
 
+def _exec_steps(device, cfg, steps, result, out_dir, delay, base_index=0):
+    """執行一串步驟，結果累加進 result。回傳是否全部關鍵步驟通過。"""
+    ok_all = True
+    for j, step in enumerate(steps):
+        sr = execute_step(device, cfg, step, base_index + j, out_dir, delay=delay)
+        result.steps.append(sr)
+        if sr.critical and not sr.ok:
+            result.passed = False
+            ok_all = False
+    return ok_all
+
+
 def _run_once(device: Device, cfg: Config, script: TestScript,
               run_index: int, res: Resolution, out_dir: Path) -> RunResult:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -52,18 +64,52 @@ def _run_once(device: Device, cfg: Config, script: TestScript,
         device.start_app()
         time.sleep(2.0)
 
-        for i, step in enumerate(script.steps):
-            sr = execute_step(device, cfg, step, i, out_dir, delay=script.step_delay)
+        idx = 0
+
+        # === 方案 B：前置導航腳本，把 App 從 launch 帶到 baseline ===
+        prelude_path = script.resolve_prelude()
+        if prelude_path:
+            if not prelude_path.exists():
+                raise FileNotFoundError(f"找不到前置導航腳本 prelude: {prelude_path}")
+            prelude = TestScript.load(prelude_path)
+            pre_ok = _exec_steps(device, cfg, prelude.steps, result, out_dir,
+                                 prelude.step_delay, base_index=idx)
+            idx += len(prelude.steps)
+            if not pre_ok:
+                result.error = "前置導航腳本失敗，無法到達 baseline，略過後續步驟"
+                result.duration_sec = round(time.time() - t0, 2)
+                return result
+
+        # === 方案 A：anchor 同步，等起始畫面出現才開始跑主步驟 ===
+        if script.anchor:
+            anchor_step = Step(
+                action="wait_image",
+                name="anchor 起始狀態同步",
+                params={
+                    "template": script.anchor["template"],
+                    "timeout": float(script.anchor.get("timeout", 30)),
+                    **({"region": script.anchor["region"]}
+                       if script.anchor.get("region") else {}),
+                },
+                critical=True,
+            )
+            sr = execute_step(device, cfg, anchor_step, idx, out_dir, delay=0.0)
             result.steps.append(sr)
-            # 關鍵步驟失敗 → 整輪判失敗，但仍執行剩餘步驟以收集畫面
-            if sr.critical and not sr.ok:
+            idx += 1
+            if not sr.ok:
                 result.passed = False
+                result.error = ("起始狀態錯位：冷啟動後未在時限內到達錄影的起始畫面。"
+                                "請從 App 啟動點重錄，或設定 prelude 導航腳本。")
+                result.duration_sec = round(time.time() - t0, 2)
+                return result
+
+        # === 主步驟 ===
+        _exec_steps(device, cfg, script.steps, result, out_dir,
+                    script.step_delay, base_index=idx)
     except Exception as e:  # noqa: BLE001
         result.passed = False
         result.error = f"{e}\n{traceback.format_exc()}"
     result.duration_sec = round(time.time() - t0, 2)
-
-    # 若沒有任何關鍵步驟，至少要有一個 assert 才算有效；否則以「無錯誤」為準
     return result
 
 

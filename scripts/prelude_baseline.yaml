@@ -1,0 +1,34 @@
+# 前置導航腳本（prelude）範例 —— 第 3 點方案 B
+#
+# 用途：把 App 從「冷啟動」帶到一個已知的 baseline 畫面（例如主畫面），
+#       讓 feature 測試腳本都能從同一個穩定起點開始，
+#       不必每支腳本都重寫登入/過場流程。
+#
+# 在 feature 腳本最上方加 `prelude: prelude_baseline.yaml` 即可套用。
+# runner 會先跑完這裡的步驟（任一 critical 步驟失敗則該輪判定到不了 baseline）。
+
+name: prelude_baseline
+description: 從冷啟動導航到主畫面 baseline
+step_delay: 1.0
+
+steps:
+  - action: wait_image
+    name: 等待標題畫面
+    template: title_logo.png
+    timeout: 30
+
+  - action: tap_image
+    name: 點擊開始
+    template: btn_start.png
+    timeout: 20
+
+  - action: tap_image
+    name: 關閉登入公告（若有）
+    template: btn_close_notice.png
+    timeout: 8
+    critical: false      # 沒有公告也不算失敗
+
+  - action: assert_image
+    name: 確認到達主畫面 baseline
+    template: main_screen_hud.png
+    critical: true

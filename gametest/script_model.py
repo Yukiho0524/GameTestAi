@@ -44,18 +44,30 @@ class TestScript:
     steps: list[Step]
     # 每步動作後的預設停頓（秒）
     step_delay: float = 0.8
+    # 起始狀態同步：冷啟動後先等此畫面出現才開始跑步驟（第 3 點方案 A）
+    #   {"template": str, "timeout": float, "region": [x1,y1,x2,y2]}
+    anchor: dict[str, Any] | None = None
+    # 前置導航腳本：先跑這支把 App 從 launch 帶到 baseline（第 3 點方案 B）
+    #   相對 scripts/ 的檔名，或絕對路徑
+    prelude: str | None = None
     source: Path | None = None
+
+    @staticmethod
+    def _parse_steps(raw_steps: list[dict]) -> list[Step]:
+        steps = []
+        for raw in raw_steps:
+            raw = dict(raw)  # 不破壞原 dict
+            action = raw.pop("action")
+            name = raw.pop("name", "")
+            critical = raw.pop("critical", action in ("assert_image", "assert_absent"))
+            steps.append(Step(action=action, name=name, params=raw, critical=critical))
+        return steps
 
     @classmethod
     def load(cls, path: str | Path) -> "TestScript":
         path = Path(path)
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        steps = []
-        for raw in data.get("steps", []):
-            action = raw.pop("action")
-            name = raw.pop("name", "")
-            critical = raw.pop("critical", action in ("assert_image", "assert_absent"))
-            steps.append(Step(action=action, name=name, params=raw, critical=critical))
+        steps = cls._parse_steps(data.get("steps", []))
         if not steps:
             raise ValueError(f"腳本 {path} 沒有任何步驟")
         return cls(
@@ -63,5 +75,17 @@ class TestScript:
             description=data.get("description", ""),
             steps=steps,
             step_delay=float(data.get("step_delay", 0.8)),
+            anchor=data.get("anchor"),
+            prelude=data.get("prelude"),
             source=path,
         )
+
+    def resolve_prelude(self) -> Path | None:
+        """把 prelude 檔名解析成絕對路徑（相對 scripts/ 目錄）。"""
+        if not self.prelude:
+            return None
+        p = Path(self.prelude)
+        if p.is_absolute():
+            return p
+        base = self.source.parent if self.source else Path("scripts")
+        return base / self.prelude

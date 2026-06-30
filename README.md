@@ -32,15 +32,26 @@ test:
 
 > 查套件名：`C:/LDPlayer/LDPlayer9/adb.exe -s 127.0.0.1:5555 shell pm list packages | findstr 關鍵字`
 
+## 圖形控制台（GUI）
+
+```powershell
+py run.py gui
+```
+
+一個視窗即可完成：勾選測試解析度（**橫版 / 直版分區**）、輸入包體名並按
+「驗證 App 可開啟」確認 ADB 能啟動、「啟動雷電」套用解析度、選腳本後「執行測試」。
+偏好純命令列也可用下方各指令。
+
 ## 完整流程
 
 ### 1. 確認環境
 
 ```powershell
-py run.py devices
+py run.py devices                 # 列出雷電實例與 adb 裝置
+py run.py presets                 # 看所有解析度預設 key
+py run.py apps --filter 關鍵字     # 找受測 App 的包體名
+py run.py verify-app <包體名>      # 確認可用 ADB 開啟
 ```
-
-列出雷電實例與 adb 裝置，確認 `instance_index` 對得上。
 
 ### 2. 上傳錄影並抽幀
 
@@ -114,6 +125,22 @@ py run.py test scripts\example_login.yaml --repeat 10
 - `region: [x1,y1,x2,y2]`（比例）可縮小圖像搜尋範圍，加速且更準。
 
 範例見 [scripts/example_login.yaml](scripts/example_login.yaml)。
+
+### 起始狀態處理（錄影沒從 App 啟動點開始時）
+
+腳本可在最上層加兩個選用欄位，吸收「錄影起點與冷啟動不一致」的問題：
+
+```yaml
+prelude: prelude_baseline.yaml   # 方案 B：先跑這支把 App 從冷啟動帶到 baseline
+anchor:                          # 方案 A：冷啟動後先等此畫面出現才開始主步驟
+  template: main_screen_hud.png
+  timeout: 40
+```
+
+- **anchor**：runner 冷啟動 App 後，會先 `wait_image(anchor)` 同步到錄影的起始畫面才開始跑 `steps`。逾時會明確標記「起始狀態錯位」，提示從啟動點重錄。
+- **prelude**：可重用的「launch→baseline」導航腳本（見 [scripts/prelude_baseline.yaml](scripts/prelude_baseline.yaml)），多支 feature 腳本可共用同一份登入/過場流程。
+- 兩者可並用：先 prelude 導航到 baseline，再用 anchor 確認，最後跑主步驟。
+- 解析度可用 `test.resolution_presets: [ld_1280x720, pt_1080x1920]` 以預設 key 指定（`py run.py presets` 查所有 key）。
 
 ## 專案結構
 

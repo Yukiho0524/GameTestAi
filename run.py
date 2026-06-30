@@ -2,6 +2,7 @@
 """雷電模擬器手遊自動化測試 CLI。
 
 用法：
+  py run.py gui                              # 開啟圖形控制台（選解析度/包體名/執行）
   py run.py devices                          # 列出雷電實例與 adb 裝置
   py run.py presets                          # 列出解析度預設（直版/橫版）
   py run.py apps [--filter 關鍵字]            # 列出模擬器已安裝套件
@@ -51,6 +52,11 @@ def cmd_extract(args):
     print("\n下一步：把這些圖交給 Claude 分析，產生 scripts/*.yaml 測試腳本。")
     if frames:
         print(f"圖片資料夾：{frames[0].parent}")
+
+
+def cmd_gui(args):
+    from gametest.gui import launch
+    launch(load_config(args.config))
 
 
 def cmd_presets(args):
@@ -163,6 +169,9 @@ def main(argv=None):
     sp.add_argument("--every", type=float, default=1.0, help="每幾秒抽一張")
     sp.add_argument("--max", type=int, default=0, help="最多抽幾張 (0=不限)")
     sp.set_defaults(func=cmd_extract)
+
+    sp = sub.add_parser("gui", help="開啟圖形控制台（選解析度/輸入包體名/執行測試）")
+    sp.set_defaults(func=cmd_gui)
 
     sp = sub.add_parser("presets", help="列出解析度預設（直版/橫版）")
     sp.set_defaults(func=cmd_presets)

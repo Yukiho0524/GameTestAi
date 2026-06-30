@@ -8,6 +8,17 @@ name: example_login
 description: 啟動遊戲 → 進入主畫面 → 領取每日獎勵
 step_delay: 1.0      # 每步動作後預設停頓秒數
 
+# === 第 3 點：起始狀態處理 ===
+# prelude（方案 B，選用）：先跑這支把 App 從冷啟動帶到 baseline 再開始主步驟。
+#   多個測試可共用同一支登入/導航腳本。檔名相對 scripts/。
+# prelude: prelude_baseline.yaml
+#
+# anchor（方案 A，選用）：冷啟動後先等這個畫面出現才開始跑 steps，
+#   用來吸收「錄影沒有從啟動點開始」造成的起始錯位。逾時會明確報「起始狀態錯位」。
+anchor:
+  template: main_screen_hud.png
+  timeout: 40
+
 steps:
   # 等待開場/標題畫面出現（用圖片確認，找不到則 wait_image 失敗）
   - action: wait_image
