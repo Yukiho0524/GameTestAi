@@ -56,10 +56,7 @@
 
 （`gametest/touchdetect.py` 的影像偵測在雷電上不可靠，已被 getevent 取代。）
 
-## 受測遊戲（目前）
-悍利商店 POCKET STORE（Gamania）。包體名 `com.gamania.pocketstorem.gama`。
-除錯登入：**左上驚嘆號長壓**開 SRDebugger → OPTIONS 分頁 → 輸入 **AccountID=100** → Login。
-
 ## 慣例
+
 - 每完成一版都 `git push origin main`；commit 訊息以 `[Hibari] ` 開頭。
 - 環境：Windows，Python 用 `py` 啟動器（PATH 上沒有 `python`，腳本勿加 shebang）。
