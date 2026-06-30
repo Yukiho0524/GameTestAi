@@ -88,16 +88,27 @@ def process_video(cfg: Config, video: Path, claude_exe: str,
     except subprocess.TimeoutExpired:
         print("  [錯誤] Claude headless 逾時")
         return False
+    combined = (proc.stdout or "") + (proc.stderr or "")
     if proc.stdout:
         print("  --- Claude 回覆（節錄）---")
         print("  " + "\n  ".join(proc.stdout.strip().splitlines()[-15:]))
+
+    # 偵測常見失敗：未登入
+    low = combined.lower()
+    if "not logged in" in low or "/login" in low or "please run" in low \
+            or "invalid api key" in low or "authentication" in low:
+        print("\n  [錯誤] headless Claude 未登入，無法自動生成。")
+        print(f"  請先用這支 CLI 登入一次（互動執行後輸入 /login 完成瀏覽器授權）：")
+        print(f"      \"{claude_exe}\"")
+        print("  或設環境變數 ANTHROPIC_API_KEY（改用 API 計費）。登入後再跑一次即可。")
+        return False
 
     # 以「對應表是否已登記」判定成功（save_and_push 會登記）
     name = script_for_video(cfg, video.name)
     if name:
         print(f"  ✅ 已生成並登記：{name}")
         return True
-    print("  [警告] Claude 執行完但未偵測到已登記腳本，請檢查 log。")
+    print("  [警告] Claude 執行完但未偵測到已登記腳本，請檢查上面 log。")
     return False
 
 
