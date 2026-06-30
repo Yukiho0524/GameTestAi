@@ -1,26 +1,27 @@
-# 由 Claude 從 video2.mp4 分析產生
-# 遊戲：悍利商店 POCKET STORE（Gamania）960x540
-# 流程：黑屏載入 → 遊戲橘子 logo → 白屏載入 → 過場教學+載入進度條
-#       → 標題畫面(進入遊戲) → 第二段載入+過場 → 主城地圖
-#       → 開啟商品管理 → 開通商品/預約進貨/倉存管理 瀏覽 → 關閉面板 → 主城
+# 由 Claude 從 video2.mp4 分析產生（第二版：改用 tap_image/tap_scene，去除盲猜座標）
+# 遊戲：悍利商店 POCKET STORE，本片錄製於 960x540
+# 流程：載入 → 標題(進入遊戲) → 進遊戲主城 → 開「商品管理」→ 瀏覽分頁 → 返回主城
 #
-# ⚠️ 座標多為影格估算（標 [需校正]），請用：
-#      py run.py test scripts\\20260630_02.yaml --once
-#      py run.py diagnose
-#    在裝置上確認後微調。
-# ⚠️ 商品管理入口觸發座標不確定，請在裝置上確認。
+# 點擊策略：
+#   - 進入遊戲 / 分頁切換 → tap_image（在當前畫面找到該元件再點，跨解析度最準）
+#   - 商品管理「入口」無法從影片確定 → tap_scene（畫面與主城相符才點，不符不點）
+#   - 關閉面板 → 用 Android 返回鍵（比猜座標可靠）
+#   - 進場等待用 assert_image 輪詢，不用固定秒數
+#
+# ⚠️ 仍待裝置校正：商品管理「入口座標」（tap_scene 的 x,y）。
+#    請 py run.py test scripts\20260630_02.yaml --once 後看 diagnose；
+#    若面板沒開，多半是入口座標要調。
 
 name: 20260630_02
-description: 悍利商店 進入遊戲 → 商品管理（開通商品/預約進貨/倉存管理）瀏覽
+description: 悍利商店 進入遊戲 → 商品管理（預約進貨/庫存管理）瀏覽
 step_delay: 1.0
 
-# 冷啟動後先等標題畫面出現（吸收載入時間，含遊戲橘子 logo + 白屏 + 過場）
 anchor:
   template: video1/title_logo.png
   timeout: 120
 
 steps:
-  # === 點擊進入遊戲 ===
+  # === 進入遊戲 ===
   - action: tap_image
     name: 點擊進入遊戲
     template: video1/btn_enter_game.png
@@ -28,83 +29,72 @@ steps:
     press: auto
     reference: refs/20260630_02/01_title.png
 
-  # 第二段載入：備货中... + 過場教學動畫（約 30s）
   - action: wait
-    name: 等待第二段載入與過場教學完成
-    seconds: 30
+    name: 緩衝
+    seconds: 2
 
-  # 確認進入主城（以 HUD 金幣欄位為基準）
+  # 輪詢等待主城 HUD 出現（吸收第二段載入），這步判成敗
   - action: assert_image
-    name: 確認進入主城畫面
+    name: 確認進入主城
     template: video1/main_hud.png
-    timeout: 60
+    timeout: 90
     critical: true
     reference_after: refs/20260630_02/04_ingame.png
 
   - action: screenshot
     name: 主城截圖
 
-  # === 開啟商品管理面板 ===
-  - action: tap
-    name: 開啟商品管理    # [需校正] 主城底部左側商品管理快捷圖示
-    x: 0.05
-    y: 0.81
+  # === 開啟商品管理（入口不確定 → 場景相符才點；座標需校正）===
+  - action: tap_scene
+    name: 開啟商品管理    # [需校正] 主城右下選單入口座標
+    reference: refs/20260630_02/05_city_before.png
+    x: 0.93
+    y: 0.90
+    scene_threshold: 0.6
     press: auto
 
   - action: wait_image
-    name: 等商品管理面板出現
+    name: 確認商品管理面板開啟
     template: video2/panel_goods.png
-    timeout: 10
+    timeout: 12
+    critical: true
 
-  # === 開通商品分頁 ===
-  - action: tap
-    name: 點開通商品分頁    # [需校正] 左側欄第一圖示 y≈0.30
-    x: 0.07
-    y: 0.30
+  - action: screenshot
+    name: 開通商品分頁(預設)截圖
+
+  # === 切到「預約進貨」分頁（找到該分頁圖示再點）===
+  - action: tap_image
+    name: 點預約進貨分頁
+    template: video2/tab_preorder.png
+    timeout: 8
     press: auto
     reference: refs/20260630_02/06_goods.png
 
   - action: wait
-    name: 等待開通商品內容載入
-    seconds: 1.0
-
-  - action: screenshot
-    name: 開通商品截圖
-
-  # === 預約進貨分頁 ===
-  - action: tap
-    name: 點預約進貨分頁    # [需校正] 左側欄第二圖示 y≈0.43
-    x: 0.07
-    y: 0.43
-    press: auto
-
-  - action: wait
-    name: 等待預約進貨內容載入
+    name: 等內容載入
     seconds: 1.0
 
   - action: screenshot
     name: 預約進貨截圖
 
-  # === 倉存管理分頁 ===
-  - action: tap
-    name: 點倉存管理分頁    # [需校正] 左側欄第三圖示 y≈0.56
-    x: 0.07
-    y: 0.56
+  # === 切到「庫存管理」分頁 ===
+  - action: tap_image
+    name: 點庫存管理分頁
+    template: video2/tab_stock.png
+    timeout: 8
     press: auto
 
   - action: wait
-    name: 等待倉存管理內容載入
+    name: 等內容載入
     seconds: 1.0
 
   - action: screenshot
-    name: 倉存管理截圖
+    name: 庫存管理截圖
 
-  # === 關閉商品管理面板返回主城 ===
-  - action: tap
-    name: 關閉商品管理面板    # [需校正] 面板左上角返回鈕
-    x: 0.03
-    y: 0.06
-    press: auto
+  # === 關閉面板：用返回鍵（比猜座標可靠）===
+  - action: key
+    name: 返回鍵關閉面板
+    keycode: back
 
   - action: wait
     name: 等待返回主城
@@ -114,6 +104,7 @@ steps:
     name: 確認返回主城
     template: video1/main_hud.png
     timeout: 10
+    critical: true
 
   - action: screenshot
     name: 結束截圖
