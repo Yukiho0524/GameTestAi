@@ -91,6 +91,10 @@ def execute_step(
         if step.action == "tap":
             device.tap(float(p["x"]), float(p["y"]))
 
+        elif step.action == "long_press":
+            device.long_press(float(p["x"]), float(p["y"]),
+                              int(p.get("duration_ms", 800)))
+
         elif step.action == "swipe":
             device.swipe(float(p["x1"]), float(p["y1"]),
                          float(p["x2"]), float(p["y2"]),
@@ -108,7 +112,8 @@ def execute_step(
         elif step.action == "screenshot":
             pass
 
-        elif step.action in ("tap_image", "wait_image", "assert_image", "assert_absent"):
+        elif step.action in ("tap_image", "long_press_image", "wait_image",
+                             "assert_image", "assert_absent"):
             tpl = _template_path(cfg, p["template"])
             region = p.get("region")
             timeout = float(p.get("timeout", 8.0))
@@ -128,9 +133,13 @@ def execute_step(
                 time.sleep(0.5)
 
             score = result.score
-            if step.action == "tap_image":
+            if step.action in ("tap_image", "long_press_image"):
                 if result.found and result.center:
-                    device.tap_pixel(*result.center)
+                    if step.action == "long_press_image":
+                        device.long_press_pixel(*result.center,
+                                                int(p.get("duration_ms", 800)))
+                    else:
+                        device.tap_pixel(*result.center)
                 else:
                     ok = False
                     msg = f"找不到圖片 {p['template']} (score={result.score:.3f})"

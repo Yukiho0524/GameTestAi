@@ -9,21 +9,23 @@ import yaml
 
 # 支援的動作型別
 ACTIONS = {
-    "tap",          # 點擊正規化座標     params: x, y
-    "tap_image",    # 找到圖片後點擊     params: template, [region], [timeout]
-    "swipe",        # 滑動               params: x1,y1,x2,y2,[duration_ms]
-    "wait",         # 等待秒數           params: seconds
-    "wait_image",   # 等待圖片出現       params: template, [timeout], [region]
-    "assert_image", # 斷言圖片存在(判定成敗) params: template, [region]
-    "assert_absent",# 斷言圖片不存在     params: template, [region]
-    "input_text",   # 輸入文字           params: text
-    "key",          # 按鍵               params: keycode | "back" | "home"
-    "screenshot",   # 主動截圖           params: -（用 name 命名）
+    "tap",            # 點擊正規化座標       params: x, y
+    "tap_image",      # 找到圖片後點擊       params: template, [region], [timeout]
+    "long_press",     # 長壓座標            params: x, y, [duration_ms=800]
+    "long_press_image",  # 找到圖片後長壓    params: template, [duration_ms=800], [timeout], [region]
+    "swipe",          # 滑動               params: x1,y1,x2,y2,[duration_ms]
+    "wait",           # 等待秒數            params: seconds
+    "wait_image",     # 等待圖片出現        params: template, [timeout], [region]
+    "assert_image",   # 斷言圖片存在(判定成敗) params: template, [region]
+    "assert_absent",  # 斷言圖片不存在      params: template, [region]
+    "input_text",     # 輸入文字（英數；中文需 ADBKeyboard）params: text
+    "key",            # 按鍵               params: keycode | "back" | "home"
+    "screenshot",     # 主動截圖            params: -（用 name 命名）
 }
 
 
-# 會「點擊」的動作（需做點擊前後截圖與適配比對）
-CLICK_ACTIONS = {"tap", "tap_image"}
+# 會「觸控」的動作（需做觸控前後截圖與適配比對）
+CLICK_ACTIONS = {"tap", "tap_image", "long_press", "long_press_image"}
 
 
 @dataclass

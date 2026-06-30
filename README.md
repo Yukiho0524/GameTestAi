@@ -136,6 +136,8 @@ py run.py test scripts\example_login.yaml --repeat 10
 |---|---|---|
 | `tap` | 點擊比例座標 | `x`, `y` |
 | `tap_image` | 找到圖片再點 | `template`, `timeout`, `region` |
+| `long_press` | 長壓比例座標 | `x`, `y`, `duration_ms`(預設800) |
+| `long_press_image` | 找到圖片再長壓 | `template`, `duration_ms`, `timeout`, `region` |
 | `swipe` | 滑動 | `x1,y1,x2,y2`, `duration_ms` |
 | `wait` | 等待秒數 | `seconds` |
 | `wait_image` | 等圖片出現 | `template`, `timeout`, `region` |
@@ -147,6 +149,9 @@ py run.py test scripts\example_login.yaml --repeat 10
 
 - `critical: true` 的步驟失敗會讓整輪判為 FAIL；`assert_*` 預設即為 critical。
 - `region: [x1,y1,x2,y2]`（比例）可縮小圖像搜尋範圍，加速且更準。
+- **長壓**：`long_press` / `long_press_image` 用 `duration_ms` 控制按住時間（毫秒）。
+- **滑動**：`swipe` 的 `duration_ms` 越大滑越慢；甩動/翻頁用小值、拖曳用大值。
+- **文字輸入**：`input_text` 走 ADB `input text`，**只支援英數**。要輸入**中文**需在模擬器裝 [ADBKeyboard](https://github.com/senzhk/ADBKeyBoard) 並設為輸入法，跟我說一聲我再把 input_text 切成走 ADBKeyboard 廣播。
 
 範例見 [scripts/example_login.yaml](scripts/example_login.yaml)。
 

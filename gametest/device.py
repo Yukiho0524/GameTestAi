@@ -50,6 +50,14 @@ class Device:
     def tap_pixel(self, px: int, py: int) -> None:
         self.adb.tap(px, py)
 
+    def long_press(self, x: float, y: float, duration_ms: int = 800) -> None:
+        px, py = self._denorm(x, y)
+        self.long_press_pixel(px, py, duration_ms)
+
+    def long_press_pixel(self, px: int, py: int, duration_ms: int = 800) -> None:
+        # 同一點、拉長持續時間 = 長壓
+        self.adb.swipe(px, py, px, py, duration_ms)
+
     def swipe(self, x1: float, y1: float, x2: float, y2: float, duration_ms: int = 300) -> None:
         a = self._denorm(x1, y1)
         b = self._denorm(x2, y2)
