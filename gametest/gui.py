@@ -70,15 +70,15 @@ class App(tk.Tk):
             .grid(row=0, column=1, sticky="w")
         ttk.Label(run, text="測試腳本：").grid(row=0, column=2, sticky="e", padx=6)
         self.script_var = tk.StringVar()
-        scripts = [p.name for p in sorted(self.cfg.scripts_dir.glob("*.y*ml"))]
         self.script_combo = ttk.Combobox(run, textvariable=self.script_var,
-                                          values=scripts, width=28, state="readonly")
-        if scripts:
-            self.script_combo.current(0)
+                                          width=28, state="readonly")
         self.script_combo.grid(row=0, column=3, sticky="we", padx=6)
         ttk.Button(run, text="執行測試", command=self._on_run_test)\
             .grid(row=0, column=4, padx=6)
+        ttk.Button(run, text="刪除腳本", command=self._on_delete_script)\
+            .grid(row=0, column=5, padx=6)
         run.columnconfigure(3, weight=1)
+        self._refresh_scripts()
 
         # 狀態列 + log
         self.status = tk.StringVar(value="就緒")
@@ -86,6 +86,42 @@ class App(tk.Tk):
             .pack(fill="x", side="bottom")
         self.log = tk.Text(self, height=8, state="disabled", wrap="word")
         self.log.pack(fill="both", expand=False, padx=8, pady=4)
+
+    def _refresh_scripts(self):
+        scripts = [p.name for p in sorted(self.cfg.scripts_dir.glob("*.y*ml"))]
+        self.script_combo["values"] = scripts
+        if scripts and self.script_var.get() not in scripts:
+            self.script_combo.current(0)
+        elif not scripts:
+            self.script_var.set("")
+
+    def _on_delete_script(self):
+        script = self.script_var.get()
+        if not script:
+            messagebox.showwarning("提醒", "沒有可刪除的腳本")
+            return
+        if not messagebox.askyesno(
+                "確認刪除", f"確定要刪除腳本 {script} 嗎？\n"
+                            "會一併清除影片對應，並自動 commit + push 到 git。"):
+            return
+        self._set_status(f"刪除 {script} ...")
+
+        def task():
+            from . import scriptgen
+            return scriptgen.delete_script(self.cfg, script, push=True)
+
+        def done(res, err):
+            self._refresh_scripts()
+            if err:
+                self._set_status("刪除失敗")
+                self._log(f"[刪除] 錯誤：{err}")
+                messagebox.showerror("刪除失敗", str(err))
+                return
+            existed, gitmsg = res
+            self._log(f"[刪除] {script}：{gitmsg or '本機已刪除'}")
+            self._set_status(f"已刪除 {script}")
+            messagebox.showinfo("已刪除", f"{script} 已刪除。\n{gitmsg}")
+        self._run_bg(task, done)
 
     def _fill_presets(self, parent, presets):
         for p in presets:

@@ -93,6 +93,27 @@ def autopush(cfg: Config, paths: list[Path], message: str,
     return f"已 commit 並推送：{message}"
 
 
+def delete_script(cfg: Config, name: str, push: bool = True) -> tuple[bool, str]:
+    """刪除 scripts/<name>.yaml、清掉對應表中指向它的影片，並（選用）推 git。
+
+    回傳 (是否原本存在, git 訊息)。
+    """
+    name = name[:-5] if name.endswith(".yaml") else name
+    path = cfg.scripts_dir / f"{name}.yaml"
+    existed = path.exists()
+    if existed:
+        path.unlink()
+    # 移除對應表中指向此腳本的影片
+    idx = _load_index(cfg)
+    for v in [k for k, val in idx.items() if val == name]:
+        del idx[v]
+    _save_index(cfg, idx)
+    msg = ""
+    if push and existed:
+        msg = autopush(cfg, [path, _index_path(cfg)], f"刪除測試腳本 {name}")
+    return existed, msg
+
+
 def save_and_push(cfg: Config, yaml_text: str, video_name: str | None = None,
                   name: str | None = None, push: bool = True) -> tuple[Path, str]:
     """落檔 + 登記 + （選用）自動推 git。回傳 (腳本路徑, git 訊息)。"""
