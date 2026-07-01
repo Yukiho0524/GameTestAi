@@ -1,57 +1,54 @@
-name: 20260701_01
-description: 冷啟動→點進入遊戲→主城地圖→開啟商品管理→切換预约进货分頁
-step_delay: 1.5
+# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 rec_20260701_092033.mp4
+# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。
+# 進場/等待/斷言可再補；座標型步驟一律避免。
 
-anchor:
-  template: rec_20260701_092033/title_logo_sc.png
-  timeout: 90
+name: rec_20260701_092033
+description: 由 rec_20260701_092033.mp4 精確點擊生成
+step_delay: 1.0
 
 steps:
-  - action: wait_image
-    name: 等待標題畫面出現
-    template: rec_20260701_092033/title_logo_sc.png
-    timeout: 90
-    reference: refs/rec_20260701_092033/title_screen.png
+  - action: tap_image
+    name: 點擊 t=37.2s
+    template: rec_20260701_092033/tap00.png
+    timeout: 12
+    press: auto
+
+  - action: wait
+    name: 等待 40s
+    seconds: 8.0
 
   - action: tap_image
-    name: 點擊進入遊戲
-    template: rec_20260701_092033/btn_enter_game_sc.png
-    timeout: 10
-    reference: refs/rec_20260701_092033/title_screen.png
+    name: 點擊 t=77.6s
+    template: rec_20260701_092033/tap01.png
+    timeout: 12
+    press: auto
 
-  - action: wait_image
-    name: 等待主城地圖載入完成
-    template: rec_20260701_092033/main_hud_city.png
-    timeout: 120
-
-  - action: assert_image
-    name: 確認主城地圖畫面
-    template: rec_20260701_092033/main_hud_city.png
-    critical: true
-    reference: refs/rec_20260701_092033/main_city.png
+  - action: wait
+    name: 等待 4s
+    seconds: 3.9
 
   - action: tap_image
-    name: 點擊商品管理按鈕
-    template: rec_20260701_092033/btn_merchandise_mgmt.png
-    timeout: 10
-    reference: refs/rec_20260701_092033/main_city.png
+    name: 點擊 t=81.5s
+    template: rec_20260701_092033/tap02.png
+    timeout: 12
+    press: auto
 
-  - action: assert_image
-    name: 確認商品管理面板開啟
-    template: rec_20260701_092033/panel_merchandise_header.png
-    critical: true
-    reference: refs/rec_20260701_092033/merchandise_panel.png
+  - action: wait
+    name: 等待 2s
+    seconds: 2.4
 
   - action: tap_image
-    name: 點擊预约进货分頁
-    template: rec_20260701_092033/tab_reserve_ordering.png
-    timeout: 10
+    name: 點擊 t=83.9s
+    template: rec_20260701_092033/tap03.png
+    timeout: 12
+    press: auto
 
-  - action: assert_image
-    name: 確認切換到预约进货頁面
-    template: rec_20260701_092033/tab_reserve_ordering_active.png
-    critical: true
-    reference: refs/rec_20260701_092033/reserve_ordering.png
+  - action: wait
+    name: 等待 2s
+    seconds: 2.1
 
-  - action: screenshot
-    name: 结束截圖
+  - action: tap_image
+    name: 點擊 t=86.0s
+    template: rec_20260701_092033/tap04.png
+    timeout: 12
+    press: auto
