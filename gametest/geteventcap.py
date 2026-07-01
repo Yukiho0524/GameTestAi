@@ -127,9 +127,13 @@ def save_taps_json(video_path, touches: list[Touch]) -> "Path":
 
 
 def start_capture(adb: Adb, max_seconds: int = 185):
-    """非阻塞啟動 getevent（裝置端 timeout 確保結束時 flush）。回傳 Popen。"""
+    """非阻塞啟動 getevent。回傳 Popen。
+
+    用 `adb shell -t` 強制配 PTY，讓 getevent 變「行緩衝」——每筆觸控事件立即吐出，
+    避免點擊稀疏時輸出不滿塊緩衝、被 pkill 中止而整段丟失（會導致 taps.json 為空）。
+    """
     return subprocess.Popen(
-        [adb.adb, "-s", adb.serial, "shell", "timeout", str(max_seconds),
+        [adb.adb, "-s", adb.serial, "shell", "-t", "timeout", str(max_seconds),
          "getevent", "-lt", _TOUCH_DEV],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
 
