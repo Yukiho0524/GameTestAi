@@ -143,37 +143,63 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
     return results, name
 
 
-def generate_yaml(cfg: Config, source: Path) -> tuple[str, str]:
-    """從 taps.json 產出確定性腳本 YAML。回傳 (yaml_text, name)。"""
+def _tpl_std(cfg: Config, tpl: str) -> float:
+    im = cv2.imread(str(cfg.assets_dir / tpl))
+    return float(im.std()) if im is not None else 0.0
+
+
+def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str, str]:
+    """從 taps.json 產出確定性腳本 YAML。回傳 (yaml_text, name)。
+
+    - 進場：anchor 等第一個「可辨識」畫面出現才開始（吸收冷啟動+載入）。
+    - 模糊/純色（過場載入）的點：std 太低 → 不當按鈕，改為等待通過。
+    """
     results, name = crop_tap_templates(cfg, source)
+    quals = [_tpl_std(cfg, tpl) for _, tpl in results]
+    good = [i for i, q in enumerate(quals) if q >= min_std]
+    a_i = good[0] if good else 0
+    a_tp, a_tpl = results[a_i]
+
     lines = [
         f"# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 {Path(source).name}",
         "# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。",
-        "# 進場/等待/斷言可再補；座標型步驟一律避免。",
+        "# anchor：冷啟動後先等第一個可辨識畫面出現才開始比對點擊。",
+        f"# 略過的點（過場/載入，無穩定按鈕）：{[i for i in range(len(results)) if i not in good]}",
         "",
         f"name: {name}",
         f"description: 由 {Path(source).name} 精確點擊生成",
         "step_delay: 1.0",
         "",
+        "anchor:",
+        f"  template: {a_tpl}",
+        f"  timeout: {min(150, int(a_tp['t'] + 45))}",
+        "",
         "steps:",
     ]
     prev_t = None
-    for tp, tpl in results:
-        # 依點擊間隔補等待
+    for i, (tp, tpl) in enumerate(results):
         if prev_t is not None:
             gap = tp["t"] - prev_t
             if gap > 1.2:
                 lines += ["  - action: wait",
                           f"    name: 等待 {gap:.0f}s",
-                          f"    seconds: {min(gap, 8):.1f}", ""]
+                          f"    seconds: {min(gap, 6):.1f}", ""]
         prev_t = tp["t"]
+        if i not in good:
+            # 過場/載入的點：無穩定按鈕 → 不點圖，僅等待通過
+            lines += ["  - action: wait",
+                      f"    name: 過場等待 t={tp['t']:.1f}s（該處無穩定按鈕，跳過）",
+                      "    seconds: 2.0", ""]
+            continue
+        # 第一個好步驟給長 timeout（anchor 已等過，這裡再寬鬆些）
+        to = 30 if i == a_i else 12
         kind = tp.get("kind", "tap")
         if kind == "long_press":
             lines += ["  - action: long_press_image",
                       f"    name: 長壓 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
                       f"    duration_ms: {max(400, tp['duration_ms'])}",
-                      "    timeout: 12", ""]
+                      f"    timeout: {to}", ""]
         elif kind == "swipe":
             lines += ["  - action: swipe",
                       f"    name: 滑動 t={tp['t']:.1f}s",
@@ -184,7 +210,7 @@ def generate_yaml(cfg: Config, source: Path) -> tuple[str, str]:
             lines += ["  - action: tap_image",
                       f"    name: 點擊 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
-                      "    timeout: 12", "    press: auto", ""]
+                      f"    timeout: {to}", "    press: auto", ""]
     return "\n".join(lines), name
 
 
