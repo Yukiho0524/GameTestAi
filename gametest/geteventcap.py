@@ -129,13 +129,59 @@ def save_taps_json(video_path, touches: list[Touch]) -> "Path":
 def start_capture(adb: Adb, max_seconds: int = 185):
     """非阻塞啟動 getevent。回傳 Popen。
 
-    用 `adb shell -t` 強制配 PTY，讓 getevent 變「行緩衝」——每筆觸控事件立即吐出，
-    避免點擊稀疏時輸出不滿塊緩衝、被 pkill 中止而整段丟失（會導致 taps.json 為空）。
+    用 `adb shell -tt` 強制配 PTY（-t 因 stdin 非終端機不會配），讓 getevent 變「行緩衝」
+    ——每筆觸控事件立即吐出，避免點擊稀疏時輸出不滿塊緩衝、被 pkill 中止而整段丟失
+    （會導致 taps.json 為空）。
     """
     return subprocess.Popen(
-        [adb.adb, "-s", adb.serial, "shell", "-t", "timeout", str(max_seconds),
+        [adb.adb, "-s", adb.serial, "shell", "-tt", "timeout", str(max_seconds),
          "getevent", "-lt", _TOUCH_DEV],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+
+
+class Capture:
+    """連續 getevent 擷取：背景執行緒即時把每行讀出（避免長 session 塞爆管線）。
+
+    長時間錄影用這個；短擷取可用 start_capture/stop_capture。
+    """
+
+    def __init__(self, adb: Adb, max_seconds: int = 3600):
+        self.adb = adb
+        self.max_seconds = max_seconds
+        self._popen = None
+        self._lines: list[str] = []
+        self._thread = None
+
+    def start(self):
+        import threading
+        self._popen = start_capture(self.adb, self.max_seconds)
+
+        def _reader(p, out):
+            try:
+                for line in p.stdout:
+                    out.append(line)
+            except Exception:
+                pass
+        self._thread = threading.Thread(
+            target=_reader, args=(self._popen, self._lines), daemon=True)
+        self._thread.start()
+
+    def stop(self) -> str:
+        try:
+            self.adb.shell("pkill", "getevent")
+        except Exception:
+            pass
+        if self._popen:
+            try:
+                self._popen.wait(timeout=10)
+            except Exception:
+                try:
+                    self._popen.kill()
+                except Exception:
+                    pass
+        if self._thread:
+            self._thread.join(timeout=5)
+        return "".join(self._lines)
 
 
 def stop_capture(adb: Adb, popen, timeout: int = 15) -> str:

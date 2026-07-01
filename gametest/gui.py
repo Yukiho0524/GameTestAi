@@ -56,12 +56,7 @@ class App(tk.Tk):
         self.gen_btn.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=4)
         ttk.Label(top, text="↑ 錄完按此，由 Claude 看影片自動生成腳本並推 git")\
             .grid(row=3, column=2, columnspan=3, sticky="w", padx=6)
-        self._rec_popen = None
-        self._rec_adb = None
-        self._rec_out = None
-        self._ge_popen = None
-        self._rec_t0 = 0.0
-        self._rec_maxr = (1279, 719)
+        self._rec_session = None
         top.columnconfigure(2, weight=1)
 
         # 區塊二：解析度（直版 / 橫版）
@@ -264,20 +259,15 @@ class App(tk.Tk):
         self._run_bg(task, done)
 
     def _on_rec_start(self):
-        from datetime import datetime
         self.rec_btn_start.config(state="disabled")
         self._set_status("準備錄影（連線模擬器中）...")
-        self._rec_out = str(self.cfg.video_source_dir /
-                            f"rec_{datetime.now():%Y%m%d_%H%M%S}.mp4")
 
         def task():
-            from . import geteventcap as ge
+            from .recorder import RecordingSession
             adb = self._adb()
-            t0 = ge.device_uptime(adb)
-            maxr = ge.touch_range(adb)
-            ge_popen = ge.start_capture(adb)
-            rec_popen = adb.screenrecord_start()
-            return adb, rec_popen, ge_popen, t0, maxr
+            sess = RecordingSession(self.cfg, adb)
+            sess.start()
+            return sess
 
         def done(res, err):
             if err:
@@ -286,45 +276,45 @@ class App(tk.Tk):
                 self._log(f"[錄影] 錯誤：{err}")
                 messagebox.showerror("錄影失敗", str(err))
                 return
-            self._rec_adb, self._rec_popen, self._ge_popen, self._rec_t0, self._rec_maxr = res
+            self._rec_session = res
             self.rec_btn_stop.config(state="normal")
-            self._set_status("● 錄影中… 請到模擬器操作，完成後按「停止錄影」")
-            self._log(f"[錄影] 開始，輸出 {self._rec_out}")
+            self._set_status("● 錄影中…（超過3分會自動接續）請操作，完成按「停止錄影」")
+            self._log("[錄影] 開始（自動接續分段）")
         self._run_bg(task, done)
 
     def _on_rec_stop(self):
-        if not self._rec_adb or not self._rec_popen:
+        if not getattr(self, "_rec_session", None):
             return
         self.rec_btn_stop.config(state="disabled")
-        self._set_status("停止錄影、存檔、解析觸控中...")
-        adb, popen, out = self._rec_adb, self._rec_popen, self._rec_out
-        ge_popen, t0, maxr = self._ge_popen, self._rec_t0, self._rec_maxr
+        self._set_status("停止錄影、串接分段、解析觸控中...")
+        sess = self._rec_session
 
         def task():
-            from . import geteventcap as ge
-            adb.screenrecord_stop(popen, out)
-            text = ge.stop_capture(adb, ge_popen)
-            touches = ge.parse(text, t0, maxr[0], maxr[1])
-            jp = ge.save_taps_json(out, touches)
-            return out, len(touches), jp
+            return sess.stop()
 
         def done(res, err):
-            self._rec_popen = self._rec_adb = self._ge_popen = None
+            self._rec_session = None
             self.rec_btn_start.config(state="normal")
             if err:
                 self._set_status("存檔失敗")
                 self._log(f"[錄影] 錯誤：{err}")
                 messagebox.showerror("錄影存檔失敗", str(err))
                 return
-            out_path, n_taps, jp = res
+            if res.get("error"):
+                self._set_status("錄影失敗")
+                self._log(f"[錄影] {res['error']}")
+                messagebox.showwarning("錄影", res["error"])
+                return
+            n_taps = res.get("n_taps", 0)
+            n_parts = res.get("n_parts", 1)
+            target = res.get("dir") or res.get("video")
             self._refresh_scripts()
-            self._set_status(f"錄影完成：{Path(out_path).name}（觸控 {n_taps} 筆）")
-            self._log(f"[錄影] 完成：{out_path}")
-            self._log(f"[錄影] 精確觸控 {n_taps} 筆 → {jp}")
+            self._set_status(f"錄影完成：{Path(target).name}（{n_parts}段，觸控 {n_taps} 筆）")
+            self._log(f"[錄影] 完成：{target}（{n_parts} 段，精確觸控 {n_taps} 筆）")
             messagebox.showinfo("錄影完成",
-                                f"已存到來源夾：\n{out_path}\n\n"
-                                f"並解析出 {n_taps} 筆精確點擊（{Path(jp).name}）。\n"
-                                "可讓 autogen 自動生成腳本（會用精確座標裁圖案）。")
+                                f"已存到來源夾：\n{target}\n\n"
+                                f"共 {n_parts} 段，解析出 {n_taps} 筆精確點擊。\n"
+                                "可按「⚙ 生成腳本」由 Claude 用精確座標裁圖案生成。")
         self._run_bg(task, done)
 
     def _on_verify(self):

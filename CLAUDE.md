@@ -46,8 +46,12 @@
 ## 精確點擊位置（getevent，優先使用）
 
 雷電不會把「顯示點按操作」標記畫進畫面，**但真實點擊會經過 `/dev/input/event2`**。
-透過 GUI「開始/停止錄影」錄製時，會同步用 getevent 擷取觸控，產生 **`<影片>.taps.json`**：
+透過 GUI「開始/停止錄影」錄製時，會同步用 getevent 擷取觸控，產生 **taps.json**：
 每筆含 `t`(影片相對秒)、`nx,ny`(正規化座標)、`duration_ms`、`kind`(tap/long_press/swipe)。
+- 單段錄影：`<影片>.mp4.taps.json`
+- 超過 3 分鐘會自動分段成 session 資料夾 `rec_<ts>/`（含 `part01.mp4...`、`session.json`、
+  `taps.json`）；抽幀會把各段依序連續處理，taps.json 時間軸也連續 → 當**一個流程**生成一支腳本。
+  用 `gametest.video.taps_json_for(來源)` 取得對應 taps.json。
 
 **生成腳本時，若來源影片有對應的 `.taps.json`：優先用它的精確座標**——
 對每筆觸控，從「`t` 當下（或前一幀）」的影格、以 `(nx,ny)` 為中心裁出**被點的圖案**當模板，

@@ -186,6 +186,34 @@ class Adb:
         except AdbError:
             pass
 
+    # ---- 分段錄影（自動接續 >3 分鐘用）----
+    def screenrecord_seg_start(self, device_path: str, seconds: int,
+                               bitrate: int = 8_000_000):
+        """啟動一段錄影（非阻塞），到 seconds 秒自動結束。回傳 Popen。"""
+        try:
+            self.shell("rm", "-f", device_path)
+        except AdbError:
+            pass
+        return subprocess.Popen(
+            [*self._base(), "shell", "screenrecord", "--time-limit",
+             str(min(seconds, 180)), "--bit-rate", str(bitrate), device_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def screenrecord_intr(self) -> None:
+        """送 INT 讓目前 screenrecord 立即收尾（提早結束該段）。"""
+        try:
+            self.shell("pkill", "-INT", "screenrecord")
+        except AdbError:
+            pass
+
+    def pull_file(self, device_path: str, local_path: str) -> None:
+        subprocess.run([*self._base(), "pull", device_path, local_path],
+                       capture_output=True, timeout=180)
+        try:
+            self.shell("rm", "-f", device_path)
+        except AdbError:
+            pass
+
     def force_stop(self, package: str) -> None:
         try:
             self.shell("am", "force-stop", package)

@@ -118,7 +118,11 @@ def _pending_videos(cfg: Config) -> list[Path]:
         return []
     out = []
     for p in sorted(src.iterdir()):
-        if p.is_file() and p.suffix.lower() in cfg.watch_extensions:
+        # 分段 session 資料夾（含 session.json）當一個來源
+        if p.is_dir() and (p / "session.json").exists():
+            if not script_for_video(cfg, p.name):
+                out.append(p)
+        elif p.is_file() and p.suffix.lower() in cfg.watch_extensions:
             if not script_for_video(cfg, p.name):
                 out.append(p)
     return out
