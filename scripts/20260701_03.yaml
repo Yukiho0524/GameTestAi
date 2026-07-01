@@ -1,0 +1,115 @@
+# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 rec_20260701_145157.mp4
+# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。
+# anchor：冷啟動後先等第一個可辨識畫面出現才開始比對點擊。
+# 略過的點（過場/載入，無穩定按鈕）：[]
+
+name: rec_20260701_145157
+description: 由 rec_20260701_145157.mp4 精確點擊生成
+step_delay: 1.0
+
+anchor:
+  template: rec_20260701_145157/tap00.png
+  timeout: 62
+
+steps:
+  - action: tap_image
+    name: 點擊 t=17.7s
+    template: rec_20260701_145157/tap00.png
+    timeout: 30
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_00.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 40s
+    seconds: 6.0
+
+  - action: tap_image
+    name: 點擊 t=57.5s
+    template: rec_20260701_145157/tap01.png
+    timeout: 12
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_01.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 4s
+    seconds: 4.2
+
+  - action: tap_image
+    name: 點擊 t=61.7s
+    template: rec_20260701_145157/tap02.png
+    timeout: 12
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_02.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 2s
+    seconds: 1.6
+
+  - action: tap_image
+    name: 點擊 t=63.3s
+    template: rec_20260701_145157/tap03.png
+    timeout: 12
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_03.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 1s
+    seconds: 1.4
+
+  - action: tap_image
+    name: 點擊 t=64.7s
+    template: rec_20260701_145157/tap04.png
+    timeout: 12
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_04.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 1s
+    seconds: 1.4
+
+  - action: swipe
+    name: 滑動 t=66.0s
+    x1: 0.7155
+    y1: 0.7859
+    x2: 2238127.7525
+    y2: 0.7442
+    duration_ms: 1408
+    scene:
+      template: refs/rec_20260701_145157/scene_05.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 4s
+    seconds: 3.7
+
+  - action: tap_image
+    name: 點擊 t=69.7s
+    template: rec_20260701_145157/tap06.png
+    timeout: 12
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_06.png
+      timeout: 20
+
+  - action: wait
+    name: 等待 2s
+    seconds: 2.2
+
+  - action: tap_image
+    name: 點擊 t=72.0s
+    template: rec_20260701_145157/tap07.png
+    timeout: 12
+    press: auto
+    scene:
+      template: refs/rec_20260701_145157/scene_07.png
+      timeout: 20
