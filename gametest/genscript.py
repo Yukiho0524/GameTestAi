@@ -183,14 +183,18 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
         "",
         "steps:",
     ]
-    def scene_block(scene_rel, indent="    "):
-        # 每步先確認在對的畫面（穩定 UI 區、寬鬆門檻）才動作
+    def scene_block(scene_rel, gap=0.0, indent="    "):
+        # 每步先確認在對的畫面（穩定 UI 區、寬鬆門檻）才動作。
+        # scene-gate timeout 要涵蓋前一步到本步的間隔（載入/過場可能很長，
+        # 例如「進入遊戲」後 ~40s 載入頁）：等待只短點一下，其餘交給 scene 輪詢。
+        timeout = min(90, max(20, int(gap) + 15))
         return [f"{indent}scene:",
                 f"{indent}  template: {scene_rel}",
-                f"{indent}  timeout: 20"]
+                f"{indent}  timeout: {timeout}"]
 
     prev_t = None
     for i, (tp, tpl, scene_rel) in enumerate(results):
+        gap = 0.0
         if prev_t is not None:
             gap = tp["t"] - prev_t
             if gap > 1.2:
@@ -211,20 +215,24 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
                       f"    template: {tpl}",
                       f"    duration_ms: {max(400, tp['duration_ms'])}",
                       f"    timeout: {to}"]
-            lines += scene_block(scene_rel) + [""]
+            lines += scene_block(scene_rel, gap) + [""]
         elif kind == "swipe":
+            # getevent 偶爾在 swipe 抓到異常原始座標 → end_nx/ny 可能爆量；
+            # 正規化座標必為 0~1，clamp 以免 adb swipe 滑到螢幕外變無效操作。
+            ex = min(1.0, max(0.0, float(tp["end_nx"])))
+            ey = min(1.0, max(0.0, float(tp["end_ny"])))
             lines += ["  - action: swipe",
                       f"    name: 滑動 t={tp['t']:.1f}s",
                       f"    x1: {tp['nx']}", f"    y1: {tp['ny']}",
-                      f"    x2: {tp['end_nx']}", f"    y2: {tp['end_ny']}",
+                      f"    x2: {ex}", f"    y2: {ey}",
                       f"    duration_ms: {max(200, tp['duration_ms'])}"]
-            lines += scene_block(scene_rel) + [""]
+            lines += scene_block(scene_rel, gap) + [""]
         else:
             lines += ["  - action: tap_image",
                       f"    name: 點擊 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
                       f"    timeout: {to}", "    press: auto"]
-            lines += scene_block(scene_rel) + [""]
+            lines += scene_block(scene_rel, gap) + [""]
     return "\n".join(lines), name
 
 
