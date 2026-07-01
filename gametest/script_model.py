@@ -101,8 +101,9 @@ class TestScript:
         if not steps:
             raise ValueError(f"腳本 {path} 沒有任何步驟")
         return cls(
-            name=data.get("name", path.stem),
-            description=data.get("description", ""),
+            # YAML 可能把純數字+底線的 name 解析成 int（如 20260701_02），強制字串
+            name=str(data.get("name", path.stem)),
+            description=str(data.get("description", "")),
             steps=steps,
             step_delay=float(data.get("step_delay", 0.8)),
             anchor=data.get("anchor"),

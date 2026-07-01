@@ -1,59 +1,87 @@
-# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 rec_20260701_100026.mp4
-# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。
-# anchor：冷啟動後先等第一個可辨識畫面出現才開始比對點擊。
-# 略過的點（過場/載入，無穩定按鈕）：[]
+# rec_20260701_100026 + 手工進場骨架（處理冷啟動例外：更新提示/標題/進入遊戲）
+# tap00（載入畫面誤點）已丟棄；tap01~04 為錄影實測點擊（箱子鈕/分頁/返回）。
+# 同款遊戲，進場重用 video1 的 title_logo / btn_enter_game 模板。
 
-name: rec_20260701_100026
-description: 由 rec_20260701_100026.mp4 精確點擊生成
+name: "20260701_02"
+description: 冷啟動→關更新提示→進入遊戲→開面板→切分頁（含例外處理）
 step_delay: 1.0
 
-anchor:
-  template: rec_20260701_100026/tap00.png
-  timeout: 86
-
 steps:
+  # === 進場例外：若出現「更新下載」提示就關掉（沒有則跳過，不算失敗）===
   - action: tap_image
-    name: 點擊 t=41.6s
-    template: rec_20260701_100026/tap00.png
+    name: 關閉更新提示(若有)
+    template: common/btn_close_x.png
     timeout: 30
+    critical: false
+    press: auto
+
+  # === 等標題畫面 → 進入遊戲（慢的解析度會卡「备货中」，等一下並補點幾次）===
+  - action: wait_image
+    name: 等待標題畫面
+    template: video1/title_logo.png
+    timeout: 90
+    critical: false
+
+  - action: wait
+    name: 等備貨/載入
+    seconds: 8
+
+  - action: tap_image
+    name: 點進入遊戲(1)
+    template: video1/btn_enter_game.png
+    timeout: 60
+    critical: false
     press: auto
 
   - action: wait
-    name: 等待 34s
-    seconds: 6.0
+    name: 緩衝
+    seconds: 5
 
   - action: tap_image
-    name: 點擊 t=76.0s
+    name: 點進入遊戲(2,保險)
+    template: video1/btn_enter_game.png
+    timeout: 15
+    critical: false
+    press: auto
+
+  # === 等主畫面（以箱子鈕出現為準，吸收登入/載入）並開面板 ===
+  - action: tap_image
+    name: 主畫面開面板(箱子鈕)
     template: rec_20260701_100026/tap01.png
-    timeout: 12
+    timeout: 120
+    critical: true
     press: auto
 
   - action: wait
-    name: 等待 4s
-    seconds: 4.3
+    name: 等面板開啟
+    seconds: 2.0
 
+  # === 錄影中的分頁操作 ===
   - action: tap_image
-    name: 點擊 t=80.3s
+    name: 切分頁2
     template: rec_20260701_100026/tap02.png
     timeout: 12
     press: auto
 
   - action: wait
-    name: 等待 2s
-    seconds: 2.3
+    name: 等
+    seconds: 1.0
 
   - action: tap_image
-    name: 點擊 t=82.6s
+    name: 切分頁3
     template: rec_20260701_100026/tap03.png
     timeout: 12
     press: auto
 
   - action: wait
-    name: 等待 5s
-    seconds: 4.7
+    name: 等
+    seconds: 1.0
 
   - action: tap_image
-    name: 點擊 t=87.3s
+    name: 返回鈕
     template: rec_20260701_100026/tap04.png
     timeout: 12
     press: auto
+
+  - action: screenshot
+    name: 結束截圖
