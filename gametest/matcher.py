@@ -31,12 +31,15 @@ def match_template(
     template_path: Path,
     cfg: Config,
     region: tuple[float, float, float, float] | None = None,
+    threshold: float | None = None,
 ) -> MatchResult:
     """在 screen 中尋找 template。
 
     region: 限定搜尋範圍 (x1,y1,x2,y2)，正規化 0~1；None 則全畫面。
+    threshold: 覆寫比對門檻（None 用 cfg.threshold）。
     多尺度比對會縮放模板以適應不同解析度。
     """
+    thr = cfg.threshold if threshold is None else threshold
     template = _load_template(template_path)
     sh, sw = screen.shape[:2]
 
@@ -71,7 +74,7 @@ def match_template(
             cx = offset_x + max_loc[0] + nw // 2
             cy = offset_y + max_loc[1] + nh // 2
             best = MatchResult(
-                found=max_val >= cfg.threshold,
+                found=max_val >= thr,
                 score=float(max_val),
                 center=(cx, cy),
                 scale=float(scale),

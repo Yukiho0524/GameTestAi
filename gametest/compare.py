@@ -148,6 +148,34 @@ def check_resolution_letterbox(img: np.ndarray, det: Detection,
     return det
 
 
+def _ui_bands(img: np.ndarray, top: float = 0.20, bot: float = 0.20) -> np.ndarray:
+    """取畫面上下 UI 帶（HUD/按鈕列），避開會捲動的中央遊戲區。"""
+    h = img.shape[0]
+    return np.vstack([img[:int(top * h)], img[int((1 - bot) * h):]])
+
+
+def scene_similarity(cur: np.ndarray, ref: np.ndarray,
+                     mode: str = "bands",
+                     region: tuple[float, float, float, float] | None = None) -> float:
+    """畫面相似度（判斷是否在同一畫面）。預設比對上下 UI 穩定帶。
+
+    mode: "bands"=上下 UI 帶（預設，避開動態中央）；"full"=整張。
+    region: 指定正規化 (x1,y1,x2,y2) 區域比對（覆蓋 mode）。
+    """
+    if region:
+        h, w = cur.shape[:2]
+        a = cur[int(region[1] * h):int(region[3] * h), int(region[0] * w):int(region[2] * w)]
+        hh, ww = ref.shape[:2]
+        b = ref[int(region[1] * hh):int(region[3] * hh), int(region[0] * ww):int(region[2] * ww)]
+    elif mode == "bands":
+        a, b = _ui_bands(cur), _ui_bands(ref)
+    else:
+        a, b = cur, ref
+    if a.size == 0 or b.size == 0:
+        return 0.0
+    return ssim(a, b)
+
+
 def is_no_response(before: np.ndarray, after: np.ndarray) -> bool:
     """點擊前後畫面幾乎相同 → 視為無反應。"""
     return ssim(before, after) >= NO_RESPONSE_SSIM

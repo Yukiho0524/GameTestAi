@@ -128,6 +128,10 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
     adir = cfg.assets_dir / (out_subdir or name)
     adir.mkdir(parents=True, exist_ok=True)
 
+    # scene 參考（整張畫面）存 refs/<name>/scene_NN.png
+    sdir = cfg.assets_dir / "refs" / (out_subdir or name)
+    sdir.mkdir(parents=True, exist_ok=True)
+
     results = []
     for i, tp in enumerate(taps):
         # 取點擊點附近最清晰的一幀（避開轉場糊幀）
@@ -139,7 +143,10 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
         crop, _, _ = _crop(frame, tp["nx"], tp["ny"])
         fn = f"tap{i:02d}.png"
         cv2.imwrite(str(adir / fn), crop)
-        results.append((tp, f"{out_subdir or name}/{fn}"))
+        scene_fn = f"scene_{i:02d}.png"
+        cv2.imwrite(str(sdir / scene_fn), frame)
+        results.append((tp, f"{out_subdir or name}/{fn}",
+                        f"refs/{out_subdir or name}/{scene_fn}"))
     return results, name
 
 
@@ -155,10 +162,10 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
     - 模糊/純色（過場載入）的點：std 太低 → 不當按鈕，改為等待通過。
     """
     results, name = crop_tap_templates(cfg, source)
-    quals = [_tpl_std(cfg, tpl) for _, tpl in results]
+    quals = [_tpl_std(cfg, tpl) for _, tpl, _ in results]
     good = [i for i, q in enumerate(quals) if q >= min_std]
     a_i = good[0] if good else 0
-    a_tp, a_tpl = results[a_i]
+    a_tp, a_tpl, _ = results[a_i]
 
     lines = [
         f"# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 {Path(source).name}",
@@ -176,8 +183,14 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
         "",
         "steps:",
     ]
+    def scene_block(scene_rel, indent="    "):
+        # 每步先確認在對的畫面（穩定 UI 區、寬鬆門檻）才動作
+        return [f"{indent}scene:",
+                f"{indent}  template: {scene_rel}",
+                f"{indent}  timeout: 20"]
+
     prev_t = None
-    for i, (tp, tpl) in enumerate(results):
+    for i, (tp, tpl, scene_rel) in enumerate(results):
         if prev_t is not None:
             gap = tp["t"] - prev_t
             if gap > 1.2:
@@ -186,12 +199,10 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
                           f"    seconds: {min(gap, 6):.1f}", ""]
         prev_t = tp["t"]
         if i not in good:
-            # 過場/載入的點：無穩定按鈕 → 不點圖，僅等待通過
             lines += ["  - action: wait",
                       f"    name: 過場等待 t={tp['t']:.1f}s（該處無穩定按鈕，跳過）",
                       "    seconds: 2.0", ""]
             continue
-        # 第一個好步驟給長 timeout（anchor 已等過，這裡再寬鬆些）
         to = 30 if i == a_i else 12
         kind = tp.get("kind", "tap")
         if kind == "long_press":
@@ -199,18 +210,21 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
                       f"    name: 長壓 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
                       f"    duration_ms: {max(400, tp['duration_ms'])}",
-                      f"    timeout: {to}", ""]
+                      f"    timeout: {to}"]
+            lines += scene_block(scene_rel) + [""]
         elif kind == "swipe":
             lines += ["  - action: swipe",
                       f"    name: 滑動 t={tp['t']:.1f}s",
                       f"    x1: {tp['nx']}", f"    y1: {tp['ny']}",
                       f"    x2: {tp['end_nx']}", f"    y2: {tp['end_ny']}",
-                      f"    duration_ms: {max(200, tp['duration_ms'])}", ""]
+                      f"    duration_ms: {max(200, tp['duration_ms'])}"]
+            lines += scene_block(scene_rel) + [""]
         else:
             lines += ["  - action: tap_image",
                       f"    name: 點擊 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
-                      f"    timeout: {to}", "    press: auto", ""]
+                      f"    timeout: {to}", "    press: auto"]
+            lines += scene_block(scene_rel) + [""]
     return "\n".join(lines), name
 
 

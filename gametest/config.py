@@ -66,6 +66,9 @@ class Config:
     # review：跑完若總成功率低於此 %，自動叫 Claude review+修正腳本（0=關閉）
     auto_review_below: int
 
+    # scene-gate：點擊前確認在對的畫面的相似度門檻（穩定 UI 區，寬鬆）
+    scene_threshold: float
+
     def ensure_dirs(self) -> None:
         for d in (self.scripts_dir, self.assets_dir, self.recordings_dir,
                   self.results_dir, self.frames_dir):
@@ -137,4 +140,5 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
         watch_every_sec=float(watch.get("every_sec", 1.0)),
         watch_poll_interval=int(watch.get("poll_interval", 5)),
         auto_review_below=int(review.get("auto_below", 50)),
+        scene_threshold=float(match.get("scene_threshold", 0.70)),
     )

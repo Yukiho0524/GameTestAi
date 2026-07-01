@@ -28,8 +28,10 @@ test:
   restart_app_each_run: true
 
 matching:
-  # 模板比對相似度門檻 (0~1)
+  # 模板比對相似度門檻 (0~1)。tap_image 可用步驟內 threshold 覆寫
   threshold: 0.80
+  # scene-gate：點擊前「確認在對的畫面」的相似度門檻（比穩定 UI 帶，較寬鬆）
+  scene_threshold: 0.70
   # 啟用多尺度比對（跨解析度必開）
   multi_scale: true
   # 多尺度搜尋範圍與步長

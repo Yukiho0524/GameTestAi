@@ -34,6 +34,8 @@ class StepResult:
     diff_boxes: list | None = None      # 點擊前後顯著差異區塊（正規化 bbox）
     resolved_press: str | None = None   # press:auto 實際生效的觸控（tap/long）
     escalated: bool = False             # 是否從短點自動升級為長壓
+    scene_score: float | None = None    # scene-gate：動作前畫面相似度
+    scene_ok: bool | None = None        # scene-gate：是否在對的畫面
 
 
 class StepError(Exception):
@@ -85,6 +87,46 @@ def execute_step(
     escalated = False
     touch_loc = None          # ("norm", x, y) 或 ("pixel", px, py)，供 auto 升級長壓用
     dur = int(p.get("duration_ms", 800))
+    scene_score = scene_ok = None
+
+    # ===== scene-gate：執行動作前先確認在對的畫面（不符就等，等不到則不執行）=====
+    if step.scene:
+        sref = compare.load_image(_ref_path(cfg, step.scene["template"])) \
+            if step.scene.get("template") else None
+        if sref is not None:
+            thr = float(step.scene.get("threshold", getattr(cfg, "scene_threshold", 0.70)))
+            s_to = float(step.scene.get("timeout", 20.0))
+            mode = step.scene.get("mode", "bands")
+            region = step.scene.get("region")
+            deadline = time.time() + s_to
+            while True:
+                try:
+                    cur = device.screencap()
+                except Exception:
+                    cur = None
+                scene_score = compare.scene_similarity(cur, sref, mode=mode, region=region) \
+                    if cur is not None else 0.0
+                if scene_score >= thr:
+                    scene_ok = True
+                    break
+                if time.time() >= deadline:
+                    scene_ok = False
+                    break
+                time.sleep(0.5)
+            if not scene_ok:
+                # 畫面不符 → 不執行動作，明確標記（區分於「按鈕沒找到」）
+                sr = StepResult(index=index, name=step.name, action=step.action,
+                                ok=False, critical=step.critical,
+                                message=f"畫面不符：未到達預期畫面（相似度 {scene_score:.2f} < {thr}）",
+                                scene_score=scene_score, scene_ok=False)
+                try:
+                    img = device.screencap()
+                    sr.screenshot = _save(out_dir, f"{index:02d}_scene_mismatch.png", img)
+                except Exception:
+                    pass
+                if delay > 0:
+                    time.sleep(delay)
+                return sr
 
     # 點擊類動作：先截「點擊前」畫面
     if step.is_click:
@@ -150,11 +192,13 @@ def execute_step(
             tpl = _template_path(cfg, p["template"])
             region = p.get("region")
             timeout = float(p.get("timeout", 8.0))
+            thr_override = p.get("threshold")
             deadline = time.time() + timeout
             result = None
             while True:
                 screen = device.screencap()
-                result = match_template(screen, tpl, cfg, region=region)
+                result = match_template(screen, tpl, cfg, region=region,
+                                        threshold=thr_override)
                 if step.action == "assert_absent":
                     if not result.found:
                         break
@@ -281,4 +325,5 @@ def execute_step(
         ref_similarity=ref_sim, after_similarity=after_sim,
         bug=bug, bug_reason=bug_reason, detection=detection, diff_boxes=diff_boxes,
         resolved_press=resolved_press, escalated=escalated,
+        scene_score=scene_score, scene_ok=scene_ok,
     )

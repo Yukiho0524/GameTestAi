@@ -45,6 +45,9 @@ class Step:
     # 觸控方式（僅 tap/tap_image 有意義）：
     #   "tap"=短點(預設)  "long"=長壓  "auto"=先短點，無反應自動改長壓並記錄實際結果
     press: str = "tap"
+    # scene-gate：執行動作前先確認在對的畫面才做；不符就等，等不到則報「畫面不符」。
+    #   dict：{reference, [threshold], [timeout], [mode: bands|full], [region]}
+    scene: dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.action not in ACTIONS:
@@ -88,9 +91,10 @@ class TestScript:
             reference_after = raw.pop("reference_after", None)
             expect_change = raw.pop("expect_change", None)
             press = raw.pop("press", "tap")
+            scene = raw.pop("scene", None)
             steps.append(Step(action=action, name=name, params=raw, critical=critical,
                               reference=reference, reference_after=reference_after,
-                              expect_change=expect_change, press=press))
+                              expect_change=expect_change, press=press, scene=scene))
         return steps
 
     @classmethod

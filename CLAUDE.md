@@ -17,6 +17,8 @@
 
 3. **動作**（見 `gametest/script_model.py` 的 ACTIONS）：`tap / tap_image / long_press / long_press_image / swipe / wait / wait_image / assert_image / assert_absent / input_text / key / screenshot`。
 
+   **scene-gate（每步先確認畫面）**：任何步驟可加 `scene: {template: refs/...(整張畫面), timeout, [threshold], [mode: bands|full], [region]}`。runtime 會在動作前先等目前畫面與該參考「夠像」（預設比穩定 UI 帶 bands、門檻 cfg.scene_threshold≈0.7）才執行；等不到就明確報「畫面不符」（區分於「按鈕沒找到」）。genscript 會自動為每個點擊步驟附上錄影當下整張畫面當 scene。tap_image 也可加步驟內 `threshold` 覆寫比對門檻。
+
 4. **不確定短點還長壓** → 用 `press: auto`（runtime 會先短點、無反應自動改長壓並記錄）。
 
 5. **anchor**（腳本頂層）：冷啟動後先等的起始畫面模板，吸收載入時間/起始錯位。
