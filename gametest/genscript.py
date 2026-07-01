@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from .config import Config
 from .video import session_parts, taps_json_for
@@ -49,14 +50,69 @@ class _Src:
             acc += d
         return None
 
+    def sharpest_frame(self, t: float, back: float = 0.5, fwd: float = 0.1,
+                       n: int = 9):
+        """在 [t-back, t+fwd] 取數幀，回傳最清晰(拉普拉斯變異最大)那張，避開轉場糊幀。"""
+        best, best_s = None, -1.0
+        for k in range(n):
+            tt = max(0.0, t - back + (back + fwd) * k / (n - 1))
+            fr = self.frame_at(tt)
+            if fr is None:
+                continue
+            s = cv2.Laplacian(cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY),
+                              cv2.CV_64F).var()
+            if s > best_s:
+                best, best_s = fr, s
+        return best
 
-def _crop(frame, nx, ny, w_frac=0.11, h_frac=0.09):
-    """以 (nx,ny) 為中心裁一塊（涵蓋被點元件）。回傳 (crop, 左上x, 左上y)。"""
+
+def _element_bbox(frame, cx, cy):
+    """從點擊點以顏色泛洪找出被點的元件邊界（避免把鄰近元件/大背景一起裁）。
+
+    回傳 (x1,y1,x2,y2) 或 None（偵測不可靠時）。
+    """
+    h, w = frame.shape[:2]
+    ww, wh = int(0.12 * w), int(0.11 * h)      # 搜尋窗
+    x0, y0 = max(0, cx - ww), max(0, cy - wh)
+    x1, y1 = min(w, cx + ww), min(h, cy + wh)
+    win = cv2.GaussianBlur(frame[y0:y1, x0:x1], (5, 5), 0)
+    if win.size == 0:
+        return None
+    mask = np.zeros((win.shape[0] + 2, win.shape[1] + 2), np.uint8)
+    seed = (min(win.shape[1] - 1, cx - x0), min(win.shape[0] - 1, cy - y0))
+    try:
+        cv2.floodFill(win.copy(), mask, seed, 255,
+                      loDiff=(16, 16, 16), upDiff=(16, 16, 16),
+                      flags=cv2.FLOODFILL_MASK_ONLY | (255 << 8))
+    except Exception:
+        return None
+    ys, xs = np.where(mask[1:-1, 1:-1] > 0)
+    if len(xs) < 40:
+        return None
+    bw, bh = xs.max() - xs.min(), ys.max() - ys.min()
+    # 太小(沒抓到) → 不可靠
+    if bw < 0.12 * win.shape[1] or bh < 0.12 * win.shape[0]:
+        return None
+    # 跨多個元件/大背景外漏（相鄰同色元件會連在一起）→ 拒絕，改用固定小框
+    if bw > 0.16 * w or bh > 0.11 * h:
+        return None
+    pad = 4
+    return (x0 + max(0, xs.min() - pad), y0 + max(0, ys.min() - pad),
+            x0 + min(win.shape[1], xs.max() + pad),
+            y0 + min(win.shape[0], ys.max() + pad))
+
+
+def _crop(frame, nx, ny, w_frac=0.05, h_frac=0.045):
+    """裁被點元件：先自動偵測元件邊界；偵測不到才退回較小的固定框（緊貼點擊點）。"""
     h, w = frame.shape[:2]
     cx, cy = int(nx * w), int(ny * h)
-    hw, hh = int(w_frac * w), int(h_frac * h)
-    x1, y1 = max(0, cx - hw), max(0, cy - hh)
-    x2, y2 = min(w, cx + hw), min(h, cy + hh)
+    box = _element_bbox(frame, cx, cy)
+    if box:
+        x1, y1, x2, y2 = box
+    else:
+        hw, hh = int(w_frac * w), int(h_frac * h)
+        x1, y1 = max(0, cx - hw), max(0, cy - hh)
+        x2, y2 = min(w, cx + hw), min(h, cy + hh)
     return frame[y1:y2, x1:x2], x1, y1
 
 
@@ -74,8 +130,8 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
 
     results = []
     for i, tp in enumerate(taps):
-        # 取點擊前一瞬間的影格（-0.15s，避免動畫/轉場）
-        frame = src.frame_at(max(0.0, tp["t"] - 0.15))
+        # 取點擊點附近最清晰的一幀（避開轉場糊幀）
+        frame = src.sharpest_frame(tp["t"])
         if frame is None:
             frame = src.frame_at(tp["t"])
         if frame is None:
