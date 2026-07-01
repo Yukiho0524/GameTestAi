@@ -71,8 +71,20 @@ def build_cmd(claude_exe: str, prompt: str) -> list[str]:
 
 def process_video(cfg: Config, video: Path, claude_exe: str,
                   every_sec: float = 2.0, timeout: int = 1800) -> bool:
-    """對單支影片：抽幀 → 叫 headless Claude 生成腳本。成功回 True。"""
+    """對單支影片：有 taps.json → 確定性生成（準、免額度）；否則叫 headless Claude。"""
+    from . import genscript
     print(f"\n▶ 自動處理新影片：{video.name}")
+
+    # 有 getevent 實測點擊 → 確定性生成，直接用精確座標裁被點圖案
+    if genscript.has_taps(video):
+        print("  偵測到 taps.json（精確點擊）→ 確定性生成 tap_image 腳本 ...")
+        try:
+            path, msg = genscript.generate_and_push(cfg, video)
+            print(f"  ✅ 已生成：{path.name}｜{msg}")
+            return True
+        except Exception as e:  # noqa: BLE001
+            print(f"  [警告] 確定性生成失敗（{e}），改用 Claude 分析。")
+
     frames = extract_frames(cfg, video, every_sec=every_sec)
     if not frames:
         print("  [略過] 抽不到影格")

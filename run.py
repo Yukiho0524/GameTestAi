@@ -120,6 +120,19 @@ def cmd_watch(args):
     watch_run(cfg, watch=args.watch, force=args.force)
 
 
+def cmd_gen_taps(args):
+    cfg = load_config(args.config)
+    cfg.ensure_dirs()
+    from gametest import genscript
+    src = Path(args.source)
+    if not genscript.has_taps(src):
+        print(f"來源沒有 taps.json（需用 GUI 錄影產生）：{src}")
+        return
+    path, msg = genscript.generate_and_push(cfg, src, push=not args.no_push)
+    print(f"已生成：{path}")
+    print(msg or "（未推送）")
+
+
 def cmd_autogen(args):
     cfg = load_config(args.config)
     from gametest.autogen import run as autogen_run
@@ -263,6 +276,11 @@ def main(argv=None):
     sp = sub.add_parser("autogen", help="偵測新影片→抽幀→呼叫 Claude 自動生成腳本並推 git")
     sp.add_argument("--watch", action="store_true", help="常駐監看（預設只掃一次）")
     sp.set_defaults(func=cmd_autogen)
+
+    sp = sub.add_parser("gen-taps", help="用 taps.json 精確點擊確定性生成腳本（免 Claude）")
+    sp.add_argument("source", help="錄影檔或 session 資料夾")
+    sp.add_argument("--no-push", action="store_true", help="只生成不推 git")
+    sp.set_defaults(func=cmd_gen_taps)
 
     sp = sub.add_parser("record", help="用 adb screenrecord 錄影(會錄到觸控標記)")
     sp.add_argument("seconds", type=int, nargs="?", default=20, help="錄影秒數(預設20，上限180)")

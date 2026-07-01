@@ -1,0 +1,54 @@
+# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 rec_20260701_092033.mp4
+# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。
+# 進場/等待/斷言可再補；座標型步驟一律避免。
+
+name: rec_20260701_092033
+description: 由 rec_20260701_092033.mp4 精確點擊生成
+step_delay: 1.0
+
+steps:
+  - action: tap_image
+    name: 點擊 t=37.2s
+    template: rec_20260701_092033/tap00.png
+    timeout: 12
+    press: auto
+
+  - action: wait
+    name: 等待 40s
+    seconds: 8.0
+
+  - action: tap_image
+    name: 點擊 t=77.6s
+    template: rec_20260701_092033/tap01.png
+    timeout: 12
+    press: auto
+
+  - action: wait
+    name: 等待 4s
+    seconds: 3.9
+
+  - action: tap_image
+    name: 點擊 t=81.5s
+    template: rec_20260701_092033/tap02.png
+    timeout: 12
+    press: auto
+
+  - action: wait
+    name: 等待 2s
+    seconds: 2.4
+
+  - action: tap_image
+    name: 點擊 t=83.9s
+    template: rec_20260701_092033/tap03.png
+    timeout: 12
+    press: auto
+
+  - action: wait
+    name: 等待 2s
+    seconds: 2.1
+
+  - action: tap_image
+    name: 點擊 t=86.0s
+    template: rec_20260701_092033/tap04.png
+    timeout: 12
+    press: auto
