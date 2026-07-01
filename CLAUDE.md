@@ -41,7 +41,7 @@
    - 自動 `git commit`（訊息以 `[Hibari] ` 開頭）+ `push origin main`
    - 若有新增 `assets/` 模板/參考圖，記得一併 `git add` 後再 push（save_and_push 只加腳本與索引）。
 
-10. 參考既有範例：`scripts/20260630_01.yaml`（除錯登入流程）、`scripts/20260630_02.yaml`（進入遊戲+商品管理）、`scripts/example_login.yaml`、`scripts/prelude_baseline.yaml`。
+10. 參考既有範例：`scripts/20260630_01.yaml`、`scripts/20260630_02.yaml`、`scripts/example_login.yaml`、`scripts/prelude_baseline.yaml`。
 
 ## 精確點擊位置（getevent，優先使用）
 
