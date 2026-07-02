@@ -38,8 +38,11 @@ class RecordingSession:
     # ---- 生命週期 ----
     def start(self):
         self.t0 = ge.device_uptime(self.adb)
-        self.maxr = ge.touch_range(self.adb)
-        self._cap = ge.Capture(self.adb, max_seconds=3600)
+        # 自動偵測觸控裝置節點（雷電上不一定是 event2）
+        self.touch_dev = ge.detect_touch_device(self.adb)
+        self.maxr = ge.touch_range(self.adb, self.touch_dev)
+        # PTY 行緩衝擷取（落地成檔會因區塊緩衝在 pkill 時丟失，反而更糟）
+        self._cap = ge.Capture(self.adb, max_seconds=3600, dev=self.touch_dev)
         self._cap.start()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -67,6 +70,7 @@ class RecordingSession:
         if self._thread:
             self._thread.join(timeout=60)
         text = self._cap.stop() if self._cap else ""
+        self._raw_text = text
         touches = ge.parse(text, self.t0, self.maxr[0], self.maxr[1])
         return self._assemble(touches)
 
@@ -85,6 +89,12 @@ class RecordingSession:
             out = src / f"rec_{self.stamp}.mp4"
             self._parts[0].replace(out)
             jp = ge.save_taps_json(out, touches)
+            # 存原始 getevent log 供日後診斷漏抓
+            try:
+                (Path(str(out) + ".taps.raw.log")).write_text(
+                    getattr(self, "_raw_text", ""), encoding="utf-8")
+            except Exception:
+                pass
             self._cleanup()
             return {"video": str(out), "taps_json": str(jp),
                     "n_taps": len(touches), "n_parts": 1}

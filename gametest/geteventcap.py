@@ -50,16 +50,38 @@ class Touch:
         return "long_press" if self.duration_ms >= long_ms else "tap"
 
 
+def detect_touch_device(adb: Adb) -> str:
+    """自動偵測觸控輸入裝置：掃 /dev/input/event* 找有 ABS_MT_POSITION_X 的那個。
+
+    雷電的觸控裝置節點號會因設定/開機而變（實測有時 event2 反而是鍵盤），
+    硬編 event2 會靜默抓不到。偵測失敗才退回預設 event2。
+    """
+    try:
+        listing = adb.shell("ls", "/dev/input")
+    except Exception:
+        return _TOUCH_DEV
+    devs = [d.strip() for d in listing.split() if d.strip().startswith("event")]
+    for d in sorted(devs):
+        path = f"/dev/input/{d}"
+        try:
+            cap = adb.shell("getevent", "-lp", path)
+        except Exception:
+            continue
+        if "ABS_MT_POSITION_X" in cap:
+            return path
+    return _TOUCH_DEV
+
+
 def device_uptime(adb: Adb) -> float:
     """裝置開機至今秒數（getevent 時間戳的基準）。"""
     out = adb.shell("cat", "/proc/uptime")
     return float(out.strip().split()[0])
 
 
-def touch_range(adb: Adb) -> tuple[int, int]:
+def touch_range(adb: Adb, dev: str | None = None) -> tuple[int, int]:
     """讀觸控裝置 X/Y 最大值；失敗則退回螢幕尺寸-1。"""
     try:
-        out = adb.shell("getevent", "-lp", _TOUCH_DEV)
+        out = adb.shell("getevent", "-lp", dev or _TOUCH_DEV)
         mx = my = None
         for line in out.splitlines():
             if "ABS_MT_POSITION_X" in line:
@@ -126,16 +148,18 @@ def save_taps_json(video_path, touches: list[Touch]) -> "Path":
     return p
 
 
-def start_capture(adb: Adb, max_seconds: int = 185):
+def start_capture(adb: Adb, max_seconds: int = 185, dev: str | None = None):
     """非阻塞啟動 getevent。回傳 Popen。
 
     用 `adb shell -tt` 強制配 PTY（-t 因 stdin 非終端機不會配），讓 getevent 變「行緩衝」
     ——每筆觸控事件立即吐出，避免點擊稀疏時輸出不滿塊緩衝、被 pkill 中止而整段丟失
     （會導致 taps.json 為空）。
+    註：曾試「落地成檔(getevent > /sdcard)」，但檔案輸出是區塊緩衝、pkill 時未 flush→整段丟失，
+    反而更糟；PTY 行緩衝才是正解。
     """
     return subprocess.Popen(
         [adb.adb, "-s", adb.serial, "shell", "-tt", "timeout", str(max_seconds),
-         "getevent", "-lt", _TOUCH_DEV],
+         "getevent", "-lt", dev or _TOUCH_DEV],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
 
 
@@ -145,16 +169,17 @@ class Capture:
     長時間錄影用這個；短擷取可用 start_capture/stop_capture。
     """
 
-    def __init__(self, adb: Adb, max_seconds: int = 3600):
+    def __init__(self, adb: Adb, max_seconds: int = 3600, dev: str | None = None):
         self.adb = adb
         self.max_seconds = max_seconds
+        self.dev = dev or detect_touch_device(adb)
         self._popen = None
         self._lines: list[str] = []
         self._thread = None
 
     def start(self):
         import threading
-        self._popen = start_capture(self.adb, self.max_seconds)
+        self._popen = start_capture(self.adb, self.max_seconds, dev=self.dev)
 
         def _reader(p, out):
             try:
