@@ -79,6 +79,8 @@ repeat / resolutions），GUI「存成任務」會記住當下勾選的解析度
 `py -m gametest.aimission --mission <名稱>` 跑套件（每輪冷開模擬器），
 每輪的 `RECORD: <名稱>=<值>` 記錄與達成狀態自動彙整成 `results/ai_report_<ts>/report.md`。
 帶 checks 的任務，AI 須在 MISSION DONE 前逐項印 `RECORD:` 行（如金幣扣款前後數值）。
+執行中每做一次操作須印一行 `STEP: <哪個畫面點了哪個介面元素>`（含補點重試），
+報告每輪會彙整成編號操作步驟清單，讓人一眼看懂 AI 點了哪些地方。
 
 被指派此類任務時：
 

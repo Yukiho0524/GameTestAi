@@ -81,7 +81,7 @@ def build_prompt(command: str, checks: list[str] | None = None,
     if checks:
         lines = "\n".join(f"   - {c}" for c in checks)
         checks_text = f"""
-6. 【記錄事項】過程中順道確認並記下下列資訊（從截圖判讀數值，必要時多截幾張）：
+7. 【記錄事項】過程中順道確認並記下下列資訊（從截圖判讀數值，必要時多截幾張）：
 {lines}
    最後輸出時，每一項用一行「RECORD: <名稱>=<值>」回報（放在 MISSION DONE 之前）；
    若某項確認結果不符預期，用「RECORD: <名稱>=異常(<說明>)」回報。"""
@@ -101,10 +101,14 @@ def build_prompt(command: str, checks: list[str] | None = None,
 1. boot 後等標題畫面（多 shot 幾次）→ 點「進入遊戲」。點擊可能被載入吞掉：
    點完 shot 確認已離開標題，沒離開就再點（短/長交替），進入後等載入（可能 30~60s）。
 2. 每一步都「先 shot、Read 判讀、再操作」，禁止盲點。座標從截圖自行估正規化值。
-3. 遇到非預期彈窗（問卷/公告/更新/劇情對話）→ 找 X / SKIP / 確認 關掉再繼續。
-4. 達成命令後 `shot final_state` 留最終畫面，最後印出一行
+3. 【操作日誌】每做一次操作（tap/long/swipe/back/text）就印一行
+   「STEP: <一句話描述做了什麼>」，說清楚是哪個畫面、點了哪個介面元素，例如
+   「STEP: 點擊標題畫面的「進入遊戲」按鈕」「STEP: 點擊主城畫面右下角的商城圖示」。
+   補點重試同一個按鈕也要各印一行（可註明「重試」）。這些行會彙整進測試報告。
+4. 遇到非預期彈窗（問卷/公告/更新/劇情對話）→ 找 X / SKIP / 確認 關掉再繼續。
+5. 達成命令後 `shot final_state` 留最終畫面，最後印出一行
    「MISSION DONE: <一句話結果>」+ 任務資料夾路徑。
-5. 判斷無法達成（重試多次仍卡住）→ 印「MISSION FAILED: <原因>」，同樣留最終截圖。{checks_text}
+6. 判斷無法達成（重試多次仍卡住）→ 印「MISSION FAILED: <原因>」，同樣留最終截圖。{checks_text}
 
 命令：{command}
 """
@@ -134,6 +138,12 @@ def run_mission(cfg: Config, command: str, checks: list[str] | None = None,
 def _parse_records(out: str) -> list[str]:
     return [m.group(1).strip()
             for m in re.finditer(r"RECORD:\s*(.+)", out)]
+
+
+def _parse_steps(out: str) -> list[str]:
+    """抽出 AI 回報的操作日誌（STEP: 點擊了哪個介面元素）。"""
+    return [m.group(1).strip()
+            for m in re.finditer(r"STEP:\s*(.+)", out)]
 
 
 def _newest_mission_dir(cfg: Config, after_ts: float) -> str:
@@ -180,11 +190,16 @@ def run_mission_suite(cfg: Config, mission: dict,
             t0 = time.time()
             ok, out = run_mission(cfg, command, checks, res)
             recs = _parse_records(out)
+            steps = _parse_steps(out)
             mdir = _newest_mission_dir(cfg, t0)
             tail = [l for l in out.strip().splitlines()
                     if "MISSION DONE" in l or "MISSION FAILED" in l]
             all_ok = all_ok and ok
             lines += [f"## {tag} — {'✅ 達成' if ok else '❌ 未達成'}", ""]
+            if steps:
+                lines += ["**操作步驟**", ""]
+                lines += [f"{i}. {s}" for i, s in enumerate(steps, 1)]
+                lines.append("")
             if recs:
                 lines += ["| 記錄 | 值 |", "|---|---|"]
                 for r in recs:
