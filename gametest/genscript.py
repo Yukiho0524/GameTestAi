@@ -163,7 +163,58 @@ def _crop(frame, nx, ny, w_frac=0.05, h_frac=0.045):
 
 # taps.json 時間基準(device_uptime)比影片起點快的秒數（screenrecord 啟動延遲）。
 # 裁模板/scene 時把 taps 時間往前補這個量，才對齊「實際點擊當下」的影格。
+# 這是「量測失敗時的預設值」；實際生成時會 per-影片自動量測（measure_tap_lag）。
 TAP_LAG = 0.6
+
+
+def measure_tap_lag(src: "_Src", taps: list[dict],
+                    default: float = TAP_LAG) -> float:
+    """自動量測「taps 時間 − 影片實際點擊時刻」的偏移（每支錄影不同）。
+
+    原理：點擊當下按鈕會出現按壓反饋（高亮/灰態/跳轉起點），對每個 tap 在
+    [t-1.3, t+0.25] 內掃描「點擊座標局部小塊」的相鄰取樣差異，首次顯著變化
+    即影片中的實際點擊時刻；lag = taps_t − 該時刻。取多個 tap 的中位數。
+    量不到（無視覺反饋/全程動畫干擾）就回傳 default。
+    """
+    lags = []
+    for tp in taps[:6]:
+        if tp.get("kind", "tap") != "tap":
+            continue  # swipe 起點會拖動清單，量測易失真
+        t, nx, ny = tp["t"], tp["nx"], tp["ny"]
+        step = 0.08
+        times = [max(0.0, t - 1.3 + k * step) for k in range(int(1.55 / step) + 1)]
+        patches = []
+        for tt in times:
+            fr = src.frame_at(tt)
+            if fr is None:
+                patches.append(None); continue
+            h, w = fr.shape[:2]
+            cx, cy = int(nx * w), int(ny * h)
+            hw, hh = max(8, int(0.055 * w)), max(8, int(0.05 * h))
+            x1, y1 = max(0, cx - hw), max(0, cy - hh)
+            x2, y2 = min(w, cx + hw), min(h, cy + hh)
+            p = cv2.cvtColor(fr[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
+            patches.append(p.astype(np.float32))
+        diffs = []   # (時刻, 局部變化量)
+        for a, b, tt in zip(patches, patches[1:], times[1:]):
+            if a is None or b is None or a.shape != b.shape:
+                diffs.append((tt, 0.0)); continue
+            diffs.append((tt, float(np.mean(np.abs(a - b)))))
+        if not diffs:
+            continue
+        vals = sorted(d for _, d in diffs)
+        base = vals[len(vals) // 2]                    # 中位數當背景動畫基線
+        thr = max(6.0, base * 4.0)
+        hit = next((tt for tt, d in diffs if d >= thr), None)
+        if hit is None:
+            continue
+        lag = t - hit
+        if -0.1 <= lag <= 1.5:                         # 合理範圍才採信
+            lags.append(max(0.0, lag))
+    if len(lags) >= 2:
+        lags.sort()
+        return lags[len(lags) // 2]
+    return default
 
 
 def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None):
@@ -182,14 +233,18 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
     sdir = cfg.assets_dir / "refs" / (out_subdir or name)
     sdir.mkdir(parents=True, exist_ok=True)
 
+    # 時間校正：taps.json 的 t 以 device_uptime 為基準，比影片起點快（screenrecord 啟動延遲）。
+    # 每支錄影自動量測偏移（量不到才用預設 TAP_LAG）。不校正的話 video=taps_t 會
+    # 裁到「實際點擊後」的轉場/目的地畫面（模板老是抓到下一畫面）。
+    lag = measure_tap_lag(src, taps)
+    print(f"  [genscript] 時間偏移校正 lag={lag:.2f}s（taps 比影片快）")
+
     results = []
     for i, tp in enumerate(taps):
-        # 時間校正：taps.json 的 t 以 device_uptime 為基準，比影片起點快 ~TAP_LAG 秒
-        # （screenrecord 啟動晚於 getevent t0；實測進入遊戲點擊 taps=16.2s 對應影片~15.5s）。
-        # 不校正的話 video=taps_t 會裁到「實際點擊後」的轉場/目的地畫面（模板老是抓到下一畫面）。
-        vt = max(0.0, tp["t"] - TAP_LAG)
-        # 在校正後時刻附近取清晰幀（窗口約 [vt-0.25, vt+0.15]，涵蓋實際點擊當下）
-        frame = src.sharpest_frame(vt, back=0.25, fwd=0.15)
+        vt = max(0.0, tp["t"] - lag)
+        # 取「按壓前一刻」的清晰幀（窗口嚴格在 vt 之前 [vt-0.4, vt-0.04]）：
+        # vt 是量測到的按壓反饋起點，之前的影格才是按鈕「常態」外觀（規範：裁常態當模板）。
+        frame = src.sharpest_frame(vt, back=0.4, fwd=-0.04)
         if frame is None:
             frame = src.frame_at(vt)
         if frame is None:
