@@ -6,7 +6,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import messagebox, simpledialog, ttk
 
 from . import resolutions as R
 from .config import Config, load_config
@@ -96,18 +96,39 @@ class App(tk.Tk):
         run.columnconfigure(3, weight=1)
         self._refresh_scripts()
 
-        # 區塊四：AI 指令（自然語言命令 → Claude 自主開遊戲操作+截圖記錄）
-        ai = ttk.LabelFrame(self, text="🤖 AI 指令（輸入命令，AI 自己開遊戲摸索執行並截圖記錄）")
+        # 區塊四：AI 白話測試（自然語言命令 → Claude 自主開遊戲操作+截圖記錄；
+        # 可存成任務檔重用、可帶記錄事項、套用上方解析度×次數跑套件出報告）
+        ai = ttk.LabelFrame(self, text="🤖 AI 白話測試（輸入命令，AI 自己開遊戲摸索執行並截圖記錄）")
         ai.pack(fill="x", **pad)
+        ttk.Label(ai, text="命令：").grid(row=0, column=0, sticky="w", padx=6)
         self.ai_cmd_var = tk.StringVar()
         ttk.Entry(ai, textvariable=self.ai_cmd_var)\
-            .grid(row=0, column=0, sticky="we", padx=6, pady=6)
-        self.ai_btn = ttk.Button(ai, text="執行 AI 指令", command=self._on_ai_mission)
-        self.ai_btn.grid(row=0, column=1, padx=6)
-        ttk.Label(ai, text="例：進入遊戲，使用右下角便利機開啟商城，購買一次雞精",
-                  foreground="gray").grid(row=1, column=0, columnspan=2,
+            .grid(row=0, column=1, columnspan=2, sticky="we", padx=6, pady=4)
+        self.ai_btn = ttk.Button(ai, text="立即執行(單次)", command=self._on_ai_mission)
+        self.ai_btn.grid(row=0, column=3, padx=6)
+        ttk.Label(ai, text="記錄事項：").grid(row=1, column=0, sticky="w", padx=6)
+        self.ai_checks_var = tk.StringVar()
+        ttk.Entry(ai, textvariable=self.ai_checks_var)\
+            .grid(row=1, column=1, columnspan=2, sticky="we", padx=6, pady=2)
+        ttk.Label(ai, text="（分號隔開，例：記錄購買前後金幣數量並確認扣款；記錄商品剩餘次數）",
+                  foreground="gray").grid(row=2, column=1, columnspan=2,
                                           sticky="w", padx=6)
-        ai.columnconfigure(0, weight=1)
+        ttk.Label(ai, text="已存任務：").grid(row=3, column=0, sticky="w", padx=6)
+        self.ai_mission_var = tk.StringVar()
+        self.ai_mission_combo = ttk.Combobox(ai, textvariable=self.ai_mission_var,
+                                             width=28, state="readonly")
+        self.ai_mission_combo.grid(row=3, column=1, sticky="we", padx=6, pady=4)
+        self.ai_save_btn = ttk.Button(ai, text="💾 存成任務(含解析度×次數)",
+                                      command=self._on_ai_save)
+        self.ai_save_btn.grid(row=3, column=2, padx=6)
+        self.ai_run_btn = ttk.Button(ai, text="▶ 執行任務套件→報告",
+                                     command=self._on_ai_run_saved)
+        self.ai_run_btn.grid(row=3, column=3, padx=6)
+        ttk.Label(ai, text="例：進入遊戲，使用右下角便利機開啟商城，購買一次雞精",
+                  foreground="gray").grid(row=4, column=1, columnspan=3,
+                                          sticky="w", padx=6)
+        ai.columnconfigure(1, weight=1)
+        self._refresh_missions()
 
         # 狀態列 + log
         self.status = tk.StringVar(value="就緒")
@@ -285,9 +306,11 @@ class App(tk.Tk):
         self._set_status("AI 任務執行中（自主操作遊戲，請勿動模擬器）...")
         self._log(f"[AI] 任務開始：{command}")
 
+        checks = self._ai_checks()
+
         def task():
             from .aimission import run_mission
-            return run_mission(self.cfg, command)
+            return run_mission(self.cfg, command, checks)
 
         def done(res, err):
             self.ai_btn.config(state="normal")
@@ -304,6 +327,83 @@ class App(tk.Tk):
                 "AI 任務結果",
                 ("✅ 已達成\n\n" if ok else "⚠ 未達成\n\n") + tail +
                 "\n\n截圖記錄在 results/ai_mission_*/")
+        self._run_bg(task, done)
+
+    # ---- AI 白話測試：任務檔（存/選/套件執行）----
+    def _ai_checks(self) -> list[str]:
+        raw = self.ai_checks_var.get().replace("；", ";")
+        return [c.strip() for c in raw.split(";") if c.strip()]
+
+    def _refresh_missions(self):
+        from .aimission import list_missions
+        try:
+            names = list_missions(self.cfg)
+        except Exception:
+            names = []
+        self.ai_mission_combo["values"] = names
+        if names and not self.ai_mission_var.get():
+            self.ai_mission_var.set(names[0])
+
+    def _on_ai_save(self):
+        command = self.ai_cmd_var.get().strip()
+        if not command:
+            messagebox.showwarning("存成任務", "請先輸入命令")
+            return
+        keys = self._selected_keys()
+        if not keys:
+            messagebox.showwarning("存成任務", "請勾選至少一個解析度（任務會記住）")
+            return
+        name = simpledialog.askstring("存成任務", "任務名稱：", parent=self)
+        if not name:
+            return
+        from . import resolutions as R
+        from .aimission import save_mission
+        labels = [r.label for r in R.resolve_keys(keys)]
+        p = save_mission(self.cfg, name, command, self._ai_checks(),
+                         self.repeat_var.get(), labels)
+        self._log(f"[AI] 已存任務：{p.name}（{'、'.join(labels)} × {self.repeat_var.get()} 次）")
+        self._refresh_missions()
+        self.ai_mission_var.set(p.stem)
+
+    def _on_ai_run_saved(self):
+        name = self.ai_mission_var.get()
+        if not name:
+            messagebox.showwarning("執行任務", "請先選擇已存任務（或先存一個）")
+            return
+        from .aimission import load_mission
+        try:
+            mission = load_mission(self.cfg, name)
+        except Exception as e:
+            messagebox.showerror("執行任務", str(e))
+            return
+        n_runs = len(mission["resolutions"]) * int(mission["repeat"])
+        if not messagebox.askyesno(
+                "執行任務套件",
+                f"任務：{mission['name']}\n命令：{mission['command']}\n"
+                f"記錄事項：{'；'.join(mission['checks']) or '（無）'}\n"
+                f"解析度：{', '.join(mission['resolutions'])} × {mission['repeat']} 次"
+                f"（共 {n_runs} 輪，每輪重開模擬器+花一次 Claude 額度）\n\n開始？"):
+            return
+        self.ai_run_btn.config(state="disabled")
+        self._log(f"[AI] 任務套件開始：{mission['name']}（{n_runs} 輪）")
+
+        def task():
+            from .aimission import run_mission_suite
+            return run_mission_suite(self.cfg, mission,
+                                     on_progress=self._set_status)
+
+        def done(res, err):
+            self.ai_run_btn.config(state="normal")
+            if err:
+                self._set_status("AI 任務套件錯誤")
+                messagebox.showerror("AI 任務套件錯誤", str(err))
+                return
+            report, ok = res
+            self._set_status("AI 任務套件完成" + ("（全部達成）" if ok else "（有未達成）"))
+            self._log(f"[AI] 報告：{report}")
+            (messagebox.showinfo if ok else messagebox.showwarning)(
+                "AI 任務套件結果",
+                ("✅ 全部達成\n\n" if ok else "⚠ 有未達成\n\n") + f"報告：\n{report}")
         self._run_bg(task, done)
 
     def _on_rec_start(self):

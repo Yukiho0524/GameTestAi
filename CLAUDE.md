@@ -70,9 +70,17 @@
 
 ## AI 指令模式（自然語言命令 → AI 自主操作遊戲）
 
-GUI「🤖 AI 指令」輸入框或 `py -m gametest.aimission "<命令>"` 會呼叫 Claude headless，
+GUI「🤖 AI 白話測試」輸入框或 `py -m gametest.aimission "<命令>"` 會呼叫 Claude headless，
 以「截圖→判讀→操作」循環自主完成命令（如「進入遊戲，開商城買一次雞精」），
-截圖記錄存 `results/ai_mission_<ts>/`。被指派此類任務時：
+截圖記錄存 `results/ai_mission_<ts>/`。
+
+**任務檔（可重用）**：命令可存成 `missions/<名稱>.yaml`（含 command / checks 記錄事項 /
+repeat / resolutions），GUI「存成任務」會記住當下勾選的解析度×次數；
+`py -m gametest.aimission --mission <名稱>` 跑套件（每輪冷開模擬器），
+每輪的 `RECORD: <名稱>=<值>` 記錄與達成狀態自動彙整成 `results/ai_report_<ts>/report.md`。
+帶 checks 的任務，AI 須在 MISSION DONE 前逐項印 `RECORD:` 行（如金幣扣款前後數值）。
+
+被指派此類任務時：
 
 1. **工具**：`py -m gametest.aidrive`（boot / shot / tap / long / swipe / back / text，
    座標一律正規化 0~1）。`boot` 開雷電+啟動遊戲並印任務資料夾；`shot` 截圖後**用 Read 看圖**再決定動作。
