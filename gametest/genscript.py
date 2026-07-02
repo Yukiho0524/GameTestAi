@@ -13,6 +13,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from . import videoseg
 from .config import Config
 from .video import session_parts, taps_json_for
 
@@ -167,17 +168,16 @@ def _crop(frame, nx, ny, w_frac=0.05, h_frac=0.045):
 TAP_LAG = 0.6
 
 
-def measure_tap_lag(src: "_Src", taps: list[dict],
-                    default: float = TAP_LAG) -> float:
-    """自動量測「taps 時間 − 影片實際點擊時刻」的偏移（每支錄影不同）。
+def press_onsets(src: "_Src", taps: list[dict]) -> dict[int, float]:
+    """量測每個 tap 在影片中的「按壓反饋起點」時刻。
 
-    原理：點擊當下按鈕會出現按壓反饋（高亮/灰態/跳轉起點），對每個 tap 在
+    原理：點擊當下按鈕出現按壓反饋（高亮/灰態/跳轉起點），對每個 tap 在
     [t-1.3, t+0.25] 內掃描「點擊座標局部小塊」的相鄰取樣差異，首次顯著變化
-    即影片中的實際點擊時刻；lag = taps_t − 該時刻。取多個 tap 的中位數。
-    量不到（無視覺反饋/全程動畫干擾）就回傳 default。
+    即實際按壓時刻。實測 per-tap lag 差異很大（0.3~1.2s），裁圖必須用
+    各點自己的起點，不能用全片中位數（會有些點裁到按壓後的畫面）。
     """
-    lags = []
-    for tp in taps[:6]:
+    onsets: dict[int, float] = {}
+    for i, tp in enumerate(taps):
         if tp.get("kind", "tap") != "tap":
             continue  # swipe 起點會拖動清單，量測易失真
         t, nx, ny = tp["t"], tp["nx"], tp["ny"]
@@ -206,13 +206,17 @@ def measure_tap_lag(src: "_Src", taps: list[dict],
         base = vals[len(vals) // 2]                    # 中位數當背景動畫基線
         thr = max(6.0, base * 4.0)
         hit = next((tt for tt, d in diffs if d >= thr), None)
-        if hit is None:
-            continue
-        lag = t - hit
-        if -0.1 <= lag <= 1.5:                         # 合理範圍才採信
-            lags.append(max(0.0, lag))
+        if hit is not None and -0.1 <= t - hit <= 1.5:  # 合理範圍才採信
+            onsets[i] = hit
+    return onsets
+
+
+def measure_tap_lag(src: "_Src", taps: list[dict],
+                    default: float = TAP_LAG) -> float:
+    """全片偏移中位數（給量不到起點的 tap/swipe 當後備）。"""
+    onsets = press_onsets(src, taps[:6])
+    lags = sorted(max(0.0, taps[i]["t"] - h) for i, h in onsets.items())
     if len(lags) >= 2:
-        lags.sort()
         return lags[len(lags) // 2]
     return default
 
@@ -236,15 +240,22 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
     # 時間校正：taps.json 的 t 以 device_uptime 為基準，比影片起點快（screenrecord 啟動延遲）。
     # 每支錄影自動量測偏移（量不到才用預設 TAP_LAG）。不校正的話 video=taps_t 會
     # 裁到「實際點擊後」的轉場/目的地畫面（模板老是抓到下一畫面）。
-    lag = measure_tap_lag(src, taps)
-    print(f"  [genscript] 時間偏移校正 lag={lag:.2f}s（taps 比影片快）")
+    # 每個 tap 的按壓起點（per-tap lag 差異大 0.3~1.2s，量不到才用中位數後備）
+    onsets = press_onsets(src, taps)
+    med_lags = sorted(max(0.0, taps[i]["t"] - h) for i, h in onsets.items())
+    lag = med_lags[len(med_lags) // 2] if len(med_lags) >= 2 else TAP_LAG
+    # 畫面分段：重建「穩定畫面 → 動作 → 下一畫面」流程結構
+    segs = videoseg.segment_video(src)
+    print(f"  [genscript] 偏移中位數 lag={lag:.2f}s（per-tap 量到 {len(onsets)}/{len(taps)}）；"
+          f"畫面分段 {len(segs)} 段")
 
+    vts = [onsets.get(i, max(0.0, tp["t"] - lag)) for i, tp in enumerate(taps)]
     results = []
     for i, tp in enumerate(taps):
-        vt = max(0.0, tp["t"] - lag)
-        # 取「按壓前一刻」的清晰幀（窗口嚴格在 vt 之前 [vt-0.4, vt-0.04]）：
-        # vt 是量測到的按壓反饋起點，之前的影格才是按鈕「常態」外觀（規範：裁常態當模板）。
-        frame = src.sharpest_frame(vt, back=0.4, fwd=-0.04)
+        vt = vts[i]
+        # 取「按壓前一刻」的清晰幀（窗口嚴格在 vt 之前 [vt-0.5, vt-0.1]）：
+        # vt 是該點自己的按壓反饋起點，之前的影格才是按鈕「常態」外觀（規範：裁常態當模板）。
+        frame = src.sharpest_frame(vt, back=0.5, fwd=-0.1)
         if frame is None:
             frame = src.frame_at(vt)
         if frame is None:
@@ -256,8 +267,23 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
         cv2.imwrite(str(adir / fn), crop)
         scene_fn = f"scene_{i:02d}.png"
         cv2.imwrite(str(sdir / scene_fn), frame)
+
+        # 後置條件：若「下一次畫面轉場」發生在下一個點擊之前 → 本點擊觸發了轉場
+        # → 存下一段的穩定幀當 until 目標（runtime 點擊後等它出現，等不到且按鈕還在就補點）。
+        post_rel, until_to = None, None
+        if tp.get("kind", "tap") != "swipe":
+            nxt = videoseg.next_seg_after(segs, vt)
+            next_vt = vts[i + 1] if i + 1 < len(vts) else float("inf")
+            if nxt is not None and segs[nxt].start < next_vt:
+                pf = videoseg.stable_frame(src, segs[nxt])
+                if pf is not None:
+                    post_fn = f"post_{i:02d}.png"
+                    cv2.imwrite(str(sdir / post_fn), pf)
+                    post_rel = f"refs/{out_subdir or name}/{post_fn}"
+                    until_to = max(15, int(segs[nxt].start - vt) + 12)
         results.append((tp, f"{out_subdir or name}/{fn}",
-                        f"refs/{out_subdir or name}/{scene_fn}"))
+                        f"refs/{out_subdir or name}/{scene_fn}",
+                        post_rel, until_to))
     return results, name
 
 
@@ -281,23 +307,26 @@ def _tpl_keypoints(cfg: Config, tpl: str) -> int:
     return len(_KP_SIFT.detect(im, None) or [])
 
 
-def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str, str]:
+def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0,
+                  out_subdir: str | None = None) -> tuple[str, str]:
     """從 taps.json 產出確定性腳本 YAML。回傳 (yaml_text, name)。
 
     - 進場：anchor 等第一個「可辨識」畫面出現才開始（吸收冷啟動+載入）。
     - 模糊/純色（過場載入）的點：std 太低 → 不當按鈕，改為等待通過。
+    - 觸發轉場的點擊帶 until 後置條件（點擊後等下一畫面，按鈕還在就補點）。
     """
-    results, name = crop_tap_templates(cfg, source)
-    quals = [_tpl_std(cfg, tpl) for _, tpl, _ in results]
+    results, name = crop_tap_templates(cfg, source, out_subdir=out_subdir)
+    quals = [_tpl_std(cfg, tpl) for _, tpl, *_ in results]
     good = [i for i, q in enumerate(quals) if q >= min_std]
     a_i = good[0] if good else 0
-    a_tp, a_tpl, _ = results[a_i]
+    a_tp, a_tpl = results[a_i][0], results[a_i][1]
 
     lines = [
         f"# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 {Path(source).name}",
         "# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。",
         "# anchor：冷啟動後先等第一個可辨識畫面出現才開始比對點擊。",
-        f"# 略過的點（過場/載入，無穩定按鈕）：{[i for i, (tp, _, _) in enumerate(results) if i not in good and tp.get('kind', 'tap') != 'swipe']}",
+        "# until：該點擊會觸發畫面轉場，點擊後等下一畫面出現；按鈕還在原地就自動補點。",
+        f"# 略過的點（過場/載入，無穩定按鈕）：{[i for i, (tp, *_) in enumerate(results) if i not in good and tp.get('kind', 'tap') != 'swipe']}",
         "",
         f"name: {name}",
         f"description: 由 {Path(source).name} 精確點擊生成",
@@ -313,13 +342,24 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
         # 每步先確認在對的畫面（穩定 UI 區、寬鬆門檻）才動作。
         # scene-gate timeout 要涵蓋前一步到本步的間隔（載入/過場可能很長，
         # 例如「進入遊戲」後 ~40s 載入頁）：等待只短點一下，其餘交給 scene 輪詢。
+        # 門檻 0.55（比 cfg 預設 0.7 寬鬆）：gate 只是前置確認，帳號狀態差異
+        # （任務泡泡/道具內容不同）實測會把相似度壓到 0.6~0.7，太緊會誤擋。
         timeout = min(90, max(20, int(gap) + 15))
         return [f"{indent}scene:",
                 f"{indent}  template: {scene_rel}",
-                f"{indent}  timeout: {timeout}"]
+                f"{indent}  timeout: {timeout}",
+                f"{indent}  threshold: 0.55"]
+
+    def until_block(post_rel, until_to, indent="    "):
+        # 後置條件：點擊後等下一畫面出現（等不到且按鈕還在原地→runtime 自動補點）
+        if not post_rel:
+            return []
+        return [f"{indent}until:",
+                f"{indent}  template: {post_rel}",
+                f"{indent}  timeout: {until_to}"]
 
     prev_t = None
-    for i, (tp, tpl, scene_rel) in enumerate(results):
+    for i, (tp, tpl, scene_rel, post_rel, until_to) in enumerate(results):
         gap = 0.0
         if prev_t is not None:
             gap = tp["t"] - prev_t
@@ -345,15 +385,17 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
                       f"    name: 點擊(座標) t={tp['t']:.1f}s〔無可辨識圖案，改座標+畫面驗證〕",
                       f"    x: {tp['nx']}", f"    y: {tp['ny']}",
                       f"    reference: {scene_rel}",
-                      "    scene_threshold: 0.6",
-                      f"    press: {press}", ""]
+                      "    scene_threshold: 0.5",
+                      f"    press: {press}"]
+            lines += until_block(post_rel, until_to) + [""]
         elif kind == "long_press":
             lines += ["  - action: long_press_image",
                       f"    name: 長壓 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
                       f"    duration_ms: {max(400, tp['duration_ms'])}",
                       f"    timeout: {to}"]
-            lines += scene_block(scene_rel, gap) + [""]
+            lines += scene_block(scene_rel, gap)
+            lines += until_block(post_rel, until_to) + [""]
         elif kind == "swipe":
             # getevent 偶爾在 swipe 抓到異常原始座標 → end_nx/ny 可能爆量；
             # 正規化座標必為 0~1，clamp 以免 adb swipe 滑到螢幕外變無效操作。
@@ -369,8 +411,13 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
             lines += ["  - action: tap_image",
                       f"    name: 點擊 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
-                      f"    timeout: {to}", "    press: auto"]
-            lines += scene_block(scene_rel, gap) + [""]
+                      f"    timeout: {to}", "    press: auto",
+                      # 座標後備：scene-gate 已確認在對的畫面、模板卻比不到時，
+                      # 改點 getevent 實測座標（畫面對了，座標點擊是安全的）
+                      f"    fallback_x: {tp['nx']}",
+                      f"    fallback_y: {tp['ny']}"]
+            lines += scene_block(scene_rel, gap)
+            lines += until_block(post_rel, until_to) + [""]
     return "\n".join(lines), name
 
 

@@ -19,6 +19,12 @@
 
    **scene-gate（每步先確認畫面）**：任何步驟可加 `scene: {template: refs/...(整張畫面), timeout, [threshold], [mode: bands|full], [region]}`。runtime 會在動作前先等目前畫面與該參考「夠像」（預設比穩定 UI 帶 bands、門檻 cfg.scene_threshold≈0.7）才執行；等不到就明確報「畫面不符」（區分於「按鈕沒找到」）。genscript 會自動為每個點擊步驟附上錄影當下整張畫面當 scene。tap_image 也可加步驟內 `threshold` 覆寫比對門檻。
 
+   **until（點擊後置條件，根治點擊被吞）**：點擊步驟可加 `until: {template: refs/...(下一畫面), timeout}`。點擊後 runtime 等該畫面出現；等不到且**原按鈕還在原地**→自動補點（press:auto 短/長交替，最多 4 次）；已離開原畫面但目標未確認→軟通過交給下一步 scene-gate 仲裁。genscript 由影片**畫面分段**（`gametest/videoseg.py`）自動判斷哪些點擊觸發轉場並附上 until。
+
+   **fallback_x/fallback_y（座標後備）**：tap_image 可帶錄影實測正規化座標；scene-gate 已確認在對的畫面、模板卻比不到（帳號狀態使按鈕外觀不同）時→改點該座標，不放棄。genscript 自動附上。
+
+   **時間軸注意**：taps.json 時間比影片快（screenrecord 啟動延遲），且每個點擊的按壓反饋 lag 差異大（實測 0.3~1.2s）。genscript 用 `press_onsets()` 逐點量測、在「按壓前一刻」裁常態外觀模板——手動裁圖時務必確認該幀在按壓之前。
+
 4. **不確定短點還長壓** → 用 `press: auto`（runtime 會先短點、無反應自動改長壓並記錄）。
 
 5. **anchor**（腳本頂層）：冷啟動後先等的起始畫面模板，吸收載入時間/起始錯位。

@@ -234,6 +234,18 @@ def execute_step(
                         device.long_press_pixel(*result.center, dur)
                     else:
                         device.tap_pixel(*result.center)
+                elif scene_ok and p.get("fallback_x") is not None \
+                        and p.get("fallback_y") is not None:
+                    # 座標後備：scene-gate 已確認在對的畫面、模板卻比不到
+                    # → 點錄影實測座標（畫面對了，座標點擊是安全的）
+                    fx, fy = float(p["fallback_x"]), float(p["fallback_y"])
+                    touch_loc = ("norm", fx, fy)
+                    if step.action == "long_press_image" or step.press == "long":
+                        device.long_press(fx, fy, dur)
+                    else:
+                        device.tap(fx, fy)
+                    msg = (f"模板未中 (score={result.score:.3f})，"
+                           f"畫面已確認→改點錄影座標")
                 else:
                     ok = False
                     msg = f"找不到圖片 {p['template']} (score={result.score:.3f})"
@@ -283,6 +295,82 @@ def execute_step(
             msg = (msg + "；" if msg else "") + "短點無反應，已自動改長壓"
         else:
             resolved_press = "tap"
+
+    # ===== until 後置條件：點擊後等「下一畫面」出現；按鈕還在原地就自動補點 =====
+    # 根治「點擊被吞」（載入中按鈕未生效）：等不到目標畫面時，若原按鈕仍在→補點（短/長交替）；
+    # 若原畫面已離開但目標未確認→軟通過（過場畫面隨機，交給下一步 scene-gate 仲裁）。
+    u = p.get("until")
+    if u and ok and touch_loc is not None:
+        uref = compare.load_image(_ref_path(cfg, u["template"]))
+        if uref is not None:
+            uthr = float(u.get("threshold", getattr(cfg, "scene_threshold", 0.70)))
+            u_deadline = time.time() + float(u.get("timeout", 20.0))
+            max_re = int(u.get("retries", 4))
+            reclicks = 0
+            reached = False
+            origin_here = True
+            long_next = escalated or step.press == "long" \
+                or step.action == "long_press_image"
+            last_try = time.time()
+            cur = after_img
+            while True:
+                if cur is not None and compare.scene_similarity(
+                        cur, uref, mode="bands") >= uthr:
+                    reached = True
+                    break
+                if time.time() >= u_deadline:
+                    break
+                # 判斷是否還停在原畫面（點擊沒生效的訊號）
+                origin_here = False
+                if cur is not None:
+                    if step.action in ("tap_image", "long_press_image"):
+                        r2 = match_template(cur, tpl, cfg, region=region,
+                                            threshold=thr_override)
+                        origin_here = bool(r2.found and r2.center)
+                        if origin_here and reclicks < max_re and \
+                                time.time() - last_try >= 2.5:
+                            if long_next:
+                                device.long_press_pixel(*r2.center, dur)
+                            else:
+                                device.tap_pixel(*r2.center)
+                            reclicks += 1
+                            last_try = time.time()
+                            if step.press == "auto":
+                                long_next = not long_next
+                    elif step.action in ("tap", "tap_scene"):
+                        rr = compare.load_image(_ref_path(cfg, step.reference)) \
+                            if step.reference else None
+                        origin_here = rr is not None and compare.ssim(cur, rr) >= \
+                            float(p.get("scene_threshold", 0.65))
+                        if origin_here and reclicks < max_re and \
+                                time.time() - last_try >= 2.5:
+                            if long_next:
+                                device.long_press(float(p["x"]), float(p["y"]), dur)
+                            else:
+                                device.tap(float(p["x"]), float(p["y"]))
+                            reclicks += 1
+                            last_try = time.time()
+                            if step.press == "auto":
+                                long_next = not long_next
+                time.sleep(0.8)
+                try:
+                    cur = device.screencap()
+                except Exception:
+                    cur = None
+            if cur is not None:
+                after_img = cur
+            if reached:
+                if reclicks:
+                    msg = (msg + "；" if msg else "") + \
+                        f"until 已到達下一畫面（補點 {reclicks} 次）"
+            elif not origin_here:
+                # 已離開原畫面（點擊有效），只是目標畫面沒確認到（過場隨機）→ 軟通過
+                msg = (msg + "；" if msg else "") + \
+                    "已離開原畫面但未確認到達 until 目標（交由下一步 scene-gate 仲裁）"
+            else:
+                ok = False
+                msg = (msg + "；" if msg else "") + \
+                    f"點擊無效：補點 {reclicks} 次仍停在原畫面（until 未到達）"
 
     # ===== 適配偵測（黑屏/掉圖/解析度/黑邊）：對動作後畫面 =====
     detect_img = after_img if after_img is not None else before_img

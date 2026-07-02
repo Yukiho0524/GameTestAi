@@ -1,0 +1,171 @@
+# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 rec_20260702_091734.mp4
+# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。
+# anchor：冷啟動後先等第一個可辨識畫面出現才開始比對點擊。
+# until：該點擊會觸發畫面轉場，點擊後等下一畫面出現；按鈕還在原地就自動補點。
+# 略過的點（過場/載入，無穩定按鈕）：[]
+
+name: rec_20260702_091734
+description: 由 rec_20260702_091734.mp4 精確點擊生成
+step_delay: 1.0
+
+anchor:
+  template: rec_20260702_091734v2/tap00.png
+  timeout: 61
+
+steps:
+  - action: tap_image
+    name: 點擊 t=16.2s
+    template: rec_20260702_091734v2/tap00.png
+    timeout: 30
+    press: auto
+    fallback_x: 0.482
+    fallback_y: 0.7785
+    scene:
+      template: refs/rec_20260702_091734v2/scene_00.png
+      timeout: 20
+      threshold: 0.55
+    until:
+      template: refs/rec_20260702_091734v2/post_00.png
+      timeout: 18
+
+  - action: wait
+    name: 等待 36s
+    seconds: 6.0
+
+  - action: tap_image
+    name: 點擊 t=51.8s
+    template: rec_20260702_091734v2/tap01.png
+    timeout: 12
+    press: auto
+    fallback_x: 0.803
+    fallback_y: 0.9129
+    scene:
+      template: refs/rec_20260702_091734v2/scene_01.png
+      timeout: 50
+      threshold: 0.55
+    until:
+      template: refs/rec_20260702_091734v2/post_01.png
+      timeout: 15
+
+  - action: wait
+    name: 等待 3s
+    seconds: 3.2
+
+  - action: tap_image
+    name: 點擊 t=55.0s
+    template: rec_20260702_091734v2/tap02.png
+    timeout: 12
+    press: auto
+    fallback_x: 0.8645
+    fallback_y: 0.9277
+    scene:
+      template: refs/rec_20260702_091734v2/scene_02.png
+      timeout: 20
+      threshold: 0.55
+
+  - action: wait
+    name: 等待 4s
+    seconds: 3.5
+
+  - action: swipe
+    name: 滑動 t=58.6s
+    x1: 0.7681
+    y1: 0.683
+    x2: 0.7655
+    y2: 0.1131
+    duration_ms: 960
+    scene:
+      template: refs/rec_20260702_091734v2/scene_03.png
+      timeout: 20
+      threshold: 0.55
+
+  - action: wait
+    name: 等待 2s
+    seconds: 2.2
+
+  - action: tap_image
+    name: 點擊 t=60.8s
+    template: rec_20260702_091734v2/tap04.png
+    timeout: 12
+    press: auto
+    fallback_x: 0.7499
+    fallback_y: 0.7563
+    scene:
+      template: refs/rec_20260702_091734v2/scene_04.png
+      timeout: 20
+      threshold: 0.55
+
+  - action: wait
+    name: 等待 3s
+    seconds: 3.1
+
+  - action: tap_scene
+    name: 點擊(座標) t=63.9s〔無可辨識圖案，改座標+畫面驗證〕
+    x: 0.1704
+    y: 0.9361
+    reference: refs/rec_20260702_091734v2/scene_05.png
+    scene_threshold: 0.5
+    press: auto
+
+  - action: wait
+    name: 等待 1s
+    seconds: 1.3
+
+  - action: tap_image
+    name: 點擊 t=65.2s
+    template: rec_20260702_091734v2/tap06.png
+    timeout: 12
+    press: auto
+    fallback_x: 0.8786
+    fallback_y: 0.9231
+    scene:
+      template: refs/rec_20260702_091734v2/scene_06.png
+      timeout: 20
+      threshold: 0.55
+
+  - action: swipe
+    name: 滑動 t=66.2s
+    x1: 0.8082
+    y1: 0.7739
+    x2: 0.8166
+    y2: 0.3031
+    duration_ms: 782
+    scene:
+      template: refs/rec_20260702_091734v2/scene_07.png
+      timeout: 20
+      threshold: 0.55
+
+  - action: wait
+    name: 等待 2s
+    seconds: 1.8
+
+  - action: tap_image
+    name: 點擊 t=67.9s
+    template: rec_20260702_091734v2/tap08.png
+    timeout: 12
+    press: auto
+    fallback_x: 0.741
+    fallback_y: 0.7405
+    scene:
+      template: refs/rec_20260702_091734v2/scene_08.png
+      timeout: 20
+      threshold: 0.55
+
+  - action: wait
+    name: 等待 3s
+    seconds: 2.9
+
+  - action: tap_image
+    name: 點擊 t=70.9s
+    template: rec_20260702_091734v2/tap09.png
+    timeout: 12
+    press: auto
+    fallback_x: 0.0709
+    fallback_y: 0.0918
+    scene:
+      template: refs/rec_20260702_091734v2/scene_09.png
+      timeout: 20
+      threshold: 0.55
+    until:
+      template: refs/rec_20260702_091734v2/post_09.png
+      timeout: 15
