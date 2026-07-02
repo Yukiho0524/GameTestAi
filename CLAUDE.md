@@ -68,6 +68,21 @@
 
 （`gametest/touchdetect.py` 的影像偵測在雷電上不可靠，已被 getevent 取代。）
 
+## AI 指令模式（自然語言命令 → AI 自主操作遊戲）
+
+GUI「🤖 AI 指令」輸入框或 `py -m gametest.aimission "<命令>"` 會呼叫 Claude headless，
+以「截圖→判讀→操作」循環自主完成命令（如「進入遊戲，開商城買一次雞精」），
+截圖記錄存 `results/ai_mission_<ts>/`。被指派此類任務時：
+
+1. **工具**：`py -m gametest.aidrive`（boot / shot / tap / long / swipe / back / text，
+   座標一律正規化 0~1）。`boot` 開雷電+啟動遊戲並印任務資料夾；`shot` 截圖後**用 Read 看圖**再決定動作。
+2. **進入遊戲**：點「進入遊戲」可能被載入吞掉——點完 shot 確認離開標題，沒離開就再點
+   （短/長交替）；進入後載入可能 30~60s，用已知模板（assets/ 下 city_hud 等）或看圖確認到達。
+3. **非預期彈窗**（問卷/公告/更新/劇情對話）：找 X / SKIP / 確認 關掉再繼續，這是常態不是錯誤。
+4. **結尾**：達成→`shot final_state` + 印「MISSION DONE: <結果>」；無法達成→「MISSION FAILED: <原因>」。
+   金流類操作（購買）以「成功訊息 + 貨幣扣款數字」雙重確認。
+5. adb 偶發 device offline：先 `adb connect 127.0.0.1:5555` 重試，模擬器程序不在才算環境中斷。
+
 ## 慣例
 
 - 每完成一版都 `git push origin main`；commit 訊息以 `[Hibari] ` 開頭。

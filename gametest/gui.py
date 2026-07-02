@@ -96,6 +96,19 @@ class App(tk.Tk):
         run.columnconfigure(3, weight=1)
         self._refresh_scripts()
 
+        # 區塊四：AI 指令（自然語言命令 → Claude 自主開遊戲操作+截圖記錄）
+        ai = ttk.LabelFrame(self, text="🤖 AI 指令（輸入命令，AI 自己開遊戲摸索執行並截圖記錄）")
+        ai.pack(fill="x", **pad)
+        self.ai_cmd_var = tk.StringVar()
+        ttk.Entry(ai, textvariable=self.ai_cmd_var)\
+            .grid(row=0, column=0, sticky="we", padx=6, pady=6)
+        self.ai_btn = ttk.Button(ai, text="執行 AI 指令", command=self._on_ai_mission)
+        self.ai_btn.grid(row=0, column=1, padx=6)
+        ttk.Label(ai, text="例：進入遊戲，使用右下角便利機開啟商城，購買一次雞精",
+                  foreground="gray").grid(row=1, column=0, columnspan=2,
+                                          sticky="w", padx=6)
+        ai.columnconfigure(0, weight=1)
+
         # 狀態列 + log
         self.status = tk.StringVar(value="就緒")
         ttk.Label(self, textvariable=self.status, anchor="w", relief="sunken")\
@@ -256,6 +269,41 @@ class App(tk.Tk):
                                 f"已處理新影片，新增 {n} 支腳本。\n"
                                 "（若顯示 0：可能沒有待處理影片，或 Claude 未登入/被擋，"
                                 "詳見主控台訊息）")
+        self._run_bg(task, done)
+
+    def _on_ai_mission(self):
+        command = self.ai_cmd_var.get().strip()
+        if not command:
+            messagebox.showwarning("AI 指令", "請先輸入命令")
+            return
+        if not messagebox.askyesno(
+                "AI 指令", f"AI 將自主開啟遊戲執行：\n\n{command}\n\n"
+                "過程截圖會存 results/ai_mission_*/。會花一次 Claude 額度、"
+                "可能需要數分鐘～十幾分鐘。開始？"):
+            return
+        self.ai_btn.config(state="disabled")
+        self._set_status("AI 任務執行中（自主操作遊戲，請勿動模擬器）...")
+        self._log(f"[AI] 任務開始：{command}")
+
+        def task():
+            from .aimission import run_mission
+            return run_mission(self.cfg, command)
+
+        def done(res, err):
+            self.ai_btn.config(state="normal")
+            if err:
+                self._set_status("AI 任務錯誤")
+                self._log(f"[AI] 錯誤：{err}")
+                messagebox.showerror("AI 任務錯誤", str(err))
+                return
+            ok, out = res
+            tail = "\n".join(out.strip().splitlines()[-8:])
+            self._log(f"[AI] 輸出（尾段）：\n{tail}")
+            self._set_status("AI 任務達成" if ok else "AI 任務未達成")
+            (messagebox.showinfo if ok else messagebox.showwarning)(
+                "AI 任務結果",
+                ("✅ 已達成\n\n" if ok else "⚠ 未達成\n\n") + tail +
+                "\n\n截圖記錄在 results/ai_mission_*/")
         self._run_bg(task, done)
 
     def _on_rec_start(self):
