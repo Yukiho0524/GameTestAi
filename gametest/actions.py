@@ -171,9 +171,26 @@ def execute_step(
                               int(p.get("duration_ms", 800)))
 
         elif step.action == "swipe":
+            # 滑動前後截圖比對，驗證是否真的捲動/有效果（避免滑到不可捲區卻誤報成功）
+            try:
+                pre = device.screencap()
+            except Exception:
+                pre = None
             device.swipe(float(p["x1"]), float(p["y1"]),
                          float(p["x2"]), float(p["y2"]),
                          int(p.get("duration_ms", 300)))
+            time.sleep(0.4)
+            try:
+                post = device.screencap()
+            except Exception:
+                post = None
+            if pre is not None and post is not None:
+                sim = compare.ssim(pre, post)
+                score = 1.0 - sim   # 變化量（越大代表越有效果）
+                if sim >= 0.96:
+                    # 幾乎沒變化：滑動未生效（起點非可捲區／該區無可捲內容）
+                    msg = (f"滑動後畫面幾乎無變化（相似度 {sim:.3f}），"
+                           f"可能未捲動：起點非可捲區或該清單無可捲內容")
 
         elif step.action == "wait":
             time.sleep(float(p["seconds"]))

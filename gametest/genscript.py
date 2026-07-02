@@ -67,11 +67,47 @@ class _Src:
 
 
 def _element_bbox(frame, cx, cy):
-    """從點擊點以顏色泛洪找出被點的元件邊界（避免把鄰近元件/大背景一起裁）。
+    """偵測被點按鈕的邊界（大小/邊緣）。
 
-    回傳 (x1,y1,x2,y2) 或 None（偵測不可靠時）。
+    先用「邊緣輪廓」找包住點擊點、且尺寸合理的最小外框（對有邊框/圖示的按鈕最準，
+    不會像顏色泛洪只填到按鈕的單一色塊）；找不到再退回顏色泛洪。
+    回傳 (x1,y1,x2,y2) 或 None（偵測不可靠時，呼叫端會用固定小框）。
     """
     h, w = frame.shape[:2]
+
+    # ===== 方法1：邊緣輪廓找按鈕外框 =====
+    ew, eh = int(0.18 * w), int(0.16 * h)
+    ex0, ey0 = max(0, cx - ew), max(0, cy - eh)
+    ex1, ey1 = min(w, cx + ew), min(h, cy + eh)
+    ewin = frame[ey0:ey1, ex0:ex1]
+    if ewin.size:
+        lcx, lcy = cx - ex0, cy - ey0
+        gray = cv2.cvtColor(ewin, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=2)
+        cnts, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        best, best_area = None, 0.0
+        for c in cnts:
+            bx, by, bw2, bh2 = cv2.boundingRect(c)
+            if not (bx <= lcx <= bx + bw2 and by <= lcy <= by + bh2):
+                continue  # 外框必須包住點擊點
+            if bw2 < 0.04 * w or bh2 < 0.03 * h:
+                continue  # 太小（雜訊/圖示局部）
+            if bw2 > 0.34 * w or bh2 > 0.16 * h:
+                continue  # 太大（整片背景/多元件）
+            # 取按鈕尺寸範圍內「最大」的外框：框住整顆按鈕（含內部圖示/文字），
+            # 而非按鈕內某個小圖示的局部輪廓，特徵較完整、比對更穩。
+            area = bw2 * bh2
+            if area > best_area:
+                best_area, best = area, (bx, by, bw2, bh2)
+        if best:
+            bx, by, bw2, bh2 = best
+            pad = 3
+            return (ex0 + max(0, bx - pad), ey0 + max(0, by - pad),
+                    ex0 + min(ewin.shape[1], bx + bw2 + pad),
+                    ey0 + min(ewin.shape[0], by + bh2 + pad))
+
+    # ===== 方法2：顏色泛洪（後援）=====
     ww, wh = int(0.12 * w), int(0.11 * h)      # 搜尋窗
     x0, y0 = max(0, cx - ww), max(0, cy - wh)
     x1, y1 = min(w, cx + ww), min(h, cy + wh)
@@ -113,6 +149,15 @@ def _crop(frame, nx, ny, w_frac=0.05, h_frac=0.045):
         hw, hh = int(w_frac * w), int(h_frac * h)
         x1, y1 = max(0, cx - hw), max(0, cy - hh)
         x2, y2 = min(w, cx + hw), min(h, cy + hh)
+    # 純色守門：裁到近純色（如按鈕平面/色帶）→無法穩定比對，會比到畫面上任一同色塊。
+    # 對稱往外擴框（中心仍對準點擊點），直到框進足夠紋理或達上限，抓到鄰近可辨識圖案。
+    gx, gy = int(0.03 * w), int(0.028 * h)
+    for _ in range(6):
+        crop = frame[y1:y2, x1:x2]
+        if crop.size and float(crop.std()) >= 18.0:
+            break
+        x1, y1 = max(0, x1 - gx), max(0, y1 - gy)
+        x2, y2 = min(w, x2 + gx), min(h, y2 + gy)
     return frame[y1:y2, x1:x2], x1, y1
 
 
@@ -134,8 +179,12 @@ def crop_tap_templates(cfg: Config, source: Path, out_subdir: str | None = None)
 
     results = []
     for i, tp in enumerate(taps):
-        # 取點擊點附近最清晰的一幀（避開轉場糊幀）
-        frame = src.sharpest_frame(tp["t"])
+        # 取「點擊前一刻」的清晰幀（窗口嚴格在 t 之前 [t-0.45, t-0.05]）：
+        # 這樣拿到的是「動作發生當下所在的畫面」，而非點擊觸發後跳轉的目的地畫面
+        # （否則模板/scene 會裁到轉場後的下一個畫面，導致 runtime 找不到/比不到）。
+        frame = src.sharpest_frame(tp["t"], back=0.45, fwd=-0.05)
+        if frame is None:
+            frame = src.frame_at(max(0.0, tp["t"] - 0.1))
         if frame is None:
             frame = src.frame_at(tp["t"])
         if frame is None:
@@ -155,6 +204,21 @@ def _tpl_std(cfg: Config, tpl: str) -> float:
     return float(im.std()) if im is not None else 0.0
 
 
+_KP_SIFT = cv2.SIFT_create() if hasattr(cv2, "SIFT_create") else None
+
+
+def _tpl_keypoints(cfg: Config, tpl: str) -> int:
+    """模板的 SIFT 關鍵點數：用來判斷是否「有可辨識圖案」。
+    近純色/平面色帶關鍵點極少 → 不該用 tap_image（會比到畫面上任一同色塊），
+    改走 tap_scene（座標＋畫面驗證）。"""
+    if _KP_SIFT is None:
+        return 999
+    im = cv2.imread(str(cfg.assets_dir / tpl), cv2.IMREAD_GRAYSCALE)
+    if im is None:
+        return 0
+    return len(_KP_SIFT.detect(im, None) or [])
+
+
 def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str, str]:
     """從 taps.json 產出確定性腳本 YAML。回傳 (yaml_text, name)。
 
@@ -171,7 +235,7 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
         f"# 由 taps.json（getevent 實測點擊）確定性生成 — 來源 {Path(source).name}",
         "# 每步點的是影片中實際被點的圖案（tap_image 多尺度比對，跨解析度）。",
         "# anchor：冷啟動後先等第一個可辨識畫面出現才開始比對點擊。",
-        f"# 略過的點（過場/載入，無穩定按鈕）：{[i for i in range(len(results)) if i not in good]}",
+        f"# 略過的點（過場/載入，無穩定按鈕）：{[i for i, (tp, _, _) in enumerate(results) if i not in good and tp.get('kind', 'tap') != 'swipe']}",
         "",
         f"name: {name}",
         f"description: 由 {Path(source).name} 精確點擊生成",
@@ -202,14 +266,26 @@ def generate_yaml(cfg: Config, source: Path, min_std: float = 16.0) -> tuple[str
                           f"    name: 等待 {gap:.0f}s",
                           f"    seconds: {min(gap, 6):.1f}", ""]
         prev_t = tp["t"]
-        if i not in good:
+        kind = tp.get("kind", "tap")
+        # 低紋理過濾（該處無穩定按鈕→跳過）只適用「圖像式點擊」：
+        # swipe 是座標式操作、不靠模板比對，即使起點裁到低紋理也必須保留。
+        if i not in good and kind != "swipe":
             lines += ["  - action: wait",
                       f"    name: 過場等待 t={tp['t']:.1f}s（該處無穩定按鈕，跳過）",
                       "    seconds: 2.0", ""]
             continue
         to = 30 if i == a_i else 12
-        kind = tp.get("kind", "tap")
-        if kind == "long_press":
+        # 關鍵點太少＝無可辨識圖案（純色/色帶）→ tap_image 會亂命中；改 tap_scene（座標＋畫面驗證）
+        low_feature = kind in ("tap", "long_press") and _tpl_keypoints(cfg, tpl) < 10
+        if low_feature:
+            press = "long" if kind == "long_press" else "auto"
+            lines += ["  - action: tap_scene",
+                      f"    name: 點擊(座標) t={tp['t']:.1f}s〔無可辨識圖案，改座標+畫面驗證〕",
+                      f"    x: {tp['nx']}", f"    y: {tp['ny']}",
+                      f"    reference: {scene_rel}",
+                      "    scene_threshold: 0.6",
+                      f"    press: {press}", ""]
+        elif kind == "long_press":
             lines += ["  - action: long_press_image",
                       f"    name: 長壓 t={tp['t']:.1f}s",
                       f"    template: {tpl}",
